@@ -283,7 +283,7 @@ AWS への初回デプロイ手順は [`docs/aws-deploy.md`](./docs/aws-deploy.m
 
 詳細仕様は次のドキュメントを参照してください。
 
-- [`docs/microcms-content-ops-analytics.spec.md`](./docs/microcms-content-ops-analytics.spec.md)
+- [`requirements/microcms-content-ops-analytics.spec.md`](./requirements/microcms-content-ops-analytics.spec.md)
 
 ## 注意事項
 
