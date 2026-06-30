@@ -37,7 +37,6 @@
       },
       "targets": [
         {
-          "cacheDurationSeconds": 300,
           "fields": [
             {
               "jsonPath": "$[*].dt",
@@ -96,7 +95,6 @@
       },
       "targets": [
         {
-          "cacheDurationSeconds": 300,
           "fields": [
             {
               "jsonPath": "$[*].api",
@@ -144,7 +142,6 @@
       },
       "targets": [
         {
-          "cacheDurationSeconds": 300,
           "fields": [
             {
               "jsonPath": "$[*].api",
@@ -212,7 +209,6 @@
       },
       "targets": [
         {
-          "cacheDurationSeconds": 300,
           "fields": [
             {
               "jsonPath": "$[*].dt",
@@ -258,5 +254,5 @@
   "timezone": "browser",
   "title": "microCMS Content Ops Analytics",
   "uid": "microcms-content-ops",
-  "version": 1
+  "version": 2
 }
