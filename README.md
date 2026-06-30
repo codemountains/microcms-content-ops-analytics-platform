@@ -155,6 +155,7 @@ Grafana から実行できるクエリを固定することで、安全性と説
 ## Grafana
 
 Grafana は DuckDB Query API の JSON レスポンスを可視化します。
+Calendar Heatmap には [`tim012432-calendarheatmap-panel`](https://grafana.com/grafana/plugins/tim012432-calendarheatmap-panel/) を使います。
 Grafana 自体には分析対象データを保存しません。
 
 ```text

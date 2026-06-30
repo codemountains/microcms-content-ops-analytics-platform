@@ -50,6 +50,12 @@ struct DaysQuery {
 }
 
 #[derive(Debug, Deserialize)]
+struct TimeRangeQuery {
+    from: Option<i64>,
+    to: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
 struct LimitedQuery {
     days: Option<u32>,
     limit: Option<u32>,
@@ -62,11 +68,8 @@ struct HealthResponse {
 
 #[derive(Debug, Serialize)]
 pub struct CalendarHeatmapRow {
-    pub dt: String,
-    pub event_count: i64,
-    pub bucket: String,
-    pub color: String,
-    pub label: String,
+    pub time: String,
+    pub value: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -166,11 +169,11 @@ async fn health() -> Json<HealthResponse> {
 
 async fn calendar_heatmap(
     State(state): State<AppState>,
-    Query(query): Query<DaysQuery>,
+    Query(query): Query<TimeRangeQuery>,
 ) -> Result<Json<Vec<CalendarHeatmapRow>>, ApiError> {
-    let days = validate_days_with_default(query.days, 365)?;
+    let (from_ms, to_ms) = validate_time_range(query.from, query.to)?;
     query_duckdb(state, move |connection, events_sql| {
-        query_calendar_heatmap_rows(connection, events_sql, days)
+        query_calendar_heatmap_rows(connection, events_sql, from_ms, to_ms)
     })
     .await
     .map(Json)
@@ -213,19 +216,31 @@ async fn average_time_to_publish_by_api(
     .map(Json)
 }
 
+const PARTITION_TIME_UTC_SUFFIX: &str = "T00:00:00Z";
+
+#[cfg(test)]
+fn format_partition_time(dt: &str) -> String {
+    format!("{dt}{PARTITION_TIME_UTC_SUFFIX}")
+}
+
 fn query_calendar_heatmap_rows(
     connection: &Connection,
     events_sql: &str,
-    days: u32,
+    from_ms: i64,
+    to_ms: i64,
 ) -> duckdb::Result<Vec<CalendarHeatmapRow>> {
-    let days_minus_one = days - 1;
     let sql = format!(
         r#"
-        WITH calendar AS (
+        WITH bounds AS (
+          SELECT
+            CAST(epoch_ms({from_ms}) AS DATE) AS start_date,
+            CAST(epoch_ms({to_ms}) AS DATE) AS end_date
+        ),
+        calendar AS (
           SELECT CAST(day AS DATE) AS dt
           FROM generate_series(
-            CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE) - INTERVAL '{days_minus_one} DAY',
-            CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE),
+            (SELECT start_date FROM bounds),
+            (SELECT end_date FROM bounds),
             INTERVAL 1 DAY
           ) AS series(day)
         ),
@@ -234,28 +249,14 @@ fn query_calendar_heatmap_rows(
             dt,
             COUNT(*) AS event_count
           FROM {events_sql}
-          WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE) - INTERVAL '{days_minus_one} DAY'
+          WHERE
+            dt >= (SELECT start_date FROM bounds)
+            AND dt <= (SELECT end_date FROM bounds)
           GROUP BY dt
         )
         SELECT
-          CAST(calendar.dt AS VARCHAR) AS dt,
-          COALESCE(daily.event_count, 0) AS event_count,
-          CASE
-            WHEN COALESCE(daily.event_count, 0) = 0 THEN '0'
-            WHEN COALESCE(daily.event_count, 0) <= 5 THEN '1-5'
-            WHEN COALESCE(daily.event_count, 0) <= 10 THEN '6-10'
-            ELSE '10+'
-          END AS bucket,
-          CASE
-            WHEN COALESCE(daily.event_count, 0) = 0 THEN '#ebedf0'
-            WHEN COALESCE(daily.event_count, 0) <= 5 THEN '#9be9a8'
-            WHEN COALESCE(daily.event_count, 0) <= 10 THEN '#40c463'
-            ELSE '#216e39'
-          END AS color,
-          CONCAT(
-            CAST(COALESCE(daily.event_count, 0) AS VARCHAR),
-            CASE WHEN COALESCE(daily.event_count, 0) = 1 THEN ' event' ELSE ' events' END
-          ) AS label
+          CONCAT(CAST(calendar.dt AS VARCHAR), '{PARTITION_TIME_UTC_SUFFIX}') AS time,
+          COALESCE(daily.event_count, 0) AS value
         FROM calendar
         LEFT JOIN daily ON daily.dt = calendar.dt
         ORDER BY calendar.dt
@@ -265,11 +266,8 @@ fn query_calendar_heatmap_rows(
     let mut statement = connection.prepare(&sql)?;
     let rows = statement.query_map([], |row| {
         Ok(CalendarHeatmapRow {
-            dt: row.get(0)?,
-            event_count: row.get(1)?,
-            bucket: row.get(2)?,
-            color: row.get(3)?,
-            label: row.get(4)?,
+            time: row.get(0)?,
+            value: row.get(1)?,
         })
     })?;
     collect_rows(rows)
@@ -496,6 +494,34 @@ fn validate_days_with_default(days: Option<u32>, default: u32) -> Result<u32, Ap
     }
 }
 
+const MAX_CALENDAR_RANGE_MS: i64 = 3660 * 24 * 60 * 60 * 1000;
+const DEFAULT_CALENDAR_RANGE_MS: i64 = 365 * 24 * 60 * 60 * 1000;
+
+fn validate_time_range(from: Option<i64>, to: Option<i64>) -> Result<(i64, i64), ApiError> {
+    match (from, to) {
+        (Some(from_ms), Some(to_ms)) => {
+            if from_ms > to_ms {
+                return Err(ApiError::InvalidQuery(
+                    "from must be less than or equal to to",
+                ));
+            }
+            if to_ms - from_ms > MAX_CALENDAR_RANGE_MS {
+                return Err(ApiError::InvalidQuery(
+                    "time range must not exceed 3660 days",
+                ));
+            }
+            Ok((from_ms, to_ms))
+        }
+        (None, None) => {
+            let to_ms = chrono::Utc::now().timestamp_millis();
+            Ok((to_ms - DEFAULT_CALENDAR_RANGE_MS, to_ms))
+        }
+        _ => Err(ApiError::InvalidQuery(
+            "from and to must both be provided",
+        )),
+    }
+}
+
 fn validate_limit(limit: Option<u32>) -> Result<u32, ApiError> {
     let limit = limit.unwrap_or(20);
     if (1..=1000).contains(&limit) {
@@ -532,8 +558,33 @@ impl IntoResponse for ApiError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{Duration, NaiveDate};
+    use chrono::{Duration, NaiveDate, TimeZone, Utc};
     use tempfile::tempdir;
+
+    #[test]
+    fn formats_partition_time_as_utc_midnight() {
+        assert_eq!(
+            format_partition_time("2026-06-29"),
+            "2026-06-29T00:00:00Z"
+        );
+    }
+
+    #[test]
+    fn validates_time_range() {
+        let from_ms = 1_000_i64;
+        let to_ms = 2_000_i64;
+        assert_eq!(
+            validate_time_range(Some(from_ms), Some(to_ms)).unwrap(),
+            (from_ms, to_ms)
+        );
+        assert!(validate_time_range(Some(to_ms), Some(from_ms)).is_err());
+        assert!(validate_time_range(Some(from_ms), None).is_err());
+        assert!(validate_time_range(None, Some(to_ms)).is_err());
+
+        let (default_from, default_to) = validate_time_range(None, None).unwrap();
+        assert!(default_to > default_from);
+        assert_eq!(default_to - default_from, DEFAULT_CALENDAR_RANGE_MS);
+    }
 
     #[test]
     fn validates_days() {
@@ -692,10 +743,21 @@ mod tests {
             duckdb_s3_use_ssl: true,
         };
 
+        let from_ms = Utc
+            .from_utc_datetime(
+                &(today - Duration::days(3))
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            )
+            .timestamp_millis();
+        let to_ms = Utc
+            .from_utc_datetime(&today.and_hms_opt(23, 59, 59).unwrap())
+            .timestamp_millis();
+
         let (calendar, activity, top_contents, publish_duration) =
             query_duckdb(state, move |connection, events_sql| {
                 Ok((
-                    query_calendar_heatmap_rows(connection, events_sql, 4)?,
+                    query_calendar_heatmap_rows(connection, events_sql, from_ms, to_ms)?,
                     query_api_activity_rows(connection, events_sql, 4)?,
                     query_top_updated_contents_rows(connection, events_sql, 4, 20)?,
                     query_average_time_to_publish_rows(connection, events_sql, 4)?,
@@ -705,13 +767,10 @@ mod tests {
             .unwrap();
 
         assert!(calendar.iter().any(|row| {
-            row.dt == zero_date.to_string()
-                && row.event_count == 0
-                && row.bucket == "0"
-                && row.label == "0 events"
+            row.time == format_partition_time(&zero_date.to_string()) && row.value == 0
         }));
         assert!(calendar.iter().any(|row| {
-            row.dt == event_date.to_string() && row.event_count == 4 && row.bucket == "1-5"
+            row.time == format_partition_time(&event_date.to_string()) && row.value == 4
         }));
 
         assert_eq!(activity.len(), 2);
