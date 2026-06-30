@@ -49,11 +49,13 @@ pub struct NormalizedEvent {
     pub api: Option<String>,
     pub content_id: Option<String>,
     pub event_type: Option<String>,
+    pub event_kind: Option<String>,
     pub old_status: Option<String>,
     pub new_status: Option<String>,
     pub old_updated_at: Option<DateTime<Utc>>,
     pub new_updated_at: Option<DateTime<Utc>>,
-    pub title: Option<String>,
+    pub content_created_at: Option<DateTime<Utc>>,
+    pub content_published_at: Option<DateTime<Utc>>,
     pub raw_payload: String,
 }
 
@@ -239,19 +241,80 @@ pub fn normalize_payload(
         .as_ref()
         .and_then(|contents| contents.new.as_ref());
 
+    let old_statuses = extract_statuses(old);
+    let new_statuses = extract_statuses(new);
+    let event_kind = derive_event_kind(payload.event_type.as_deref(), &old_statuses, &new_statuses);
+
     Ok(NormalizedEvent {
         received_at,
         service: payload.service,
         api: payload.api,
         content_id: payload.id,
         event_type: payload.event_type,
-        old_status: extract_string(old, &["status"]),
-        new_status: extract_string(new, &["status"]),
+        event_kind,
+        old_status: status_csv(&old_statuses),
+        new_status: status_csv(&new_statuses),
         old_updated_at: extract_timestamp(old, &["updatedAt", "updated_at"]),
         new_updated_at: extract_timestamp(new, &["updatedAt", "updated_at"]),
-        title: extract_string(new, &["title"]).or_else(|| extract_string(old, &["title"])),
+        content_created_at: extract_nested_timestamp(new, &["publishValue", "createdAt"]),
+        content_published_at: extract_nested_timestamp(new, &["publishValue", "publishedAt"]),
         raw_payload,
     })
+}
+
+fn derive_event_kind(
+    event_type: Option<&str>,
+    old_statuses: &[String],
+    new_statuses: &[String],
+) -> Option<String> {
+    let old_published = has_status(old_statuses, "PUBLISH");
+    let new_published = has_status(new_statuses, "PUBLISH");
+    let new_draft = has_status(new_statuses, "DRAFT");
+
+    let event_kind = match event_type {
+        Some("delete") => "DELETE",
+        Some("new") if new_published => "CREATE_PUBLISH",
+        Some("new") if new_draft => "CREATE_DRAFT",
+        Some("edit") if !old_published && new_published => "FIRST_PUBLISH",
+        Some("edit") if old_published && new_published => "UPDATE_PUBLISH",
+        Some("edit") if old_published && !new_published => "UNPUBLISH",
+        _ => return None,
+    };
+
+    Some(event_kind.to_owned())
+}
+
+fn has_status(statuses: &[String], expected: &str) -> bool {
+    statuses.iter().any(|status| status == expected)
+}
+
+fn extract_statuses(value: Option<&Value>) -> Vec<String> {
+    let Some(status) = value
+        .and_then(|value| value.as_object())
+        .and_then(|object| object.get("status"))
+    else {
+        return Vec::new();
+    };
+
+    let mut statuses = match status {
+        Value::String(status) => vec![status.to_owned()],
+        Value::Array(statuses) => statuses
+            .iter()
+            .filter_map(|status| status.as_str().map(ToOwned::to_owned))
+            .collect(),
+        _ => Vec::new(),
+    };
+    statuses.sort();
+    statuses.dedup();
+    statuses
+}
+
+fn status_csv(statuses: &[String]) -> Option<String> {
+    if statuses.is_empty() {
+        None
+    } else {
+        Some(statuses.join(","))
+    }
 }
 
 fn extract_string(value: Option<&Value>, keys: &[&str]) -> Option<String> {
@@ -267,6 +330,20 @@ fn extract_timestamp(value: Option<&Value>, keys: &[&str]) -> Option<DateTime<Ut
         .map(|value| value.with_timezone(&Utc))
 }
 
+fn extract_nested_string(value: Option<&Value>, path: &[&str]) -> Option<String> {
+    let mut current = value?;
+    for key in path {
+        current = current.as_object()?.get(*key)?;
+    }
+    current.as_str().map(ToOwned::to_owned)
+}
+
+fn extract_nested_timestamp(value: Option<&Value>, path: &[&str]) -> Option<DateTime<Utc>> {
+    extract_nested_string(value, path)
+        .and_then(|value| DateTime::parse_from_rfc3339(&value).ok())
+        .map(|value| value.with_timezone(&Utc))
+}
+
 pub fn event_to_parquet(event: &NormalizedEvent) -> Result<Vec<u8>, IngestError> {
     let schema = Arc::new(Schema::new(vec![
         Field::new(
@@ -278,6 +355,7 @@ pub fn event_to_parquet(event: &NormalizedEvent) -> Result<Vec<u8>, IngestError>
         Field::new("api", DataType::Utf8, true),
         Field::new("content_id", DataType::Utf8, true),
         Field::new("event_type", DataType::Utf8, true),
+        Field::new("event_kind", DataType::Utf8, true),
         Field::new("old_status", DataType::Utf8, true),
         Field::new("new_status", DataType::Utf8, true),
         Field::new(
@@ -290,7 +368,16 @@ pub fn event_to_parquet(event: &NormalizedEvent) -> Result<Vec<u8>, IngestError>
             DataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into())),
             true,
         ),
-        Field::new("title", DataType::Utf8, true),
+        Field::new(
+            "content_created_at",
+            DataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into())),
+            true,
+        ),
+        Field::new(
+            "content_published_at",
+            DataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into())),
+            true,
+        ),
         Field::new("raw_payload", DataType::Utf8, false),
     ]));
 
@@ -302,11 +389,13 @@ pub fn event_to_parquet(event: &NormalizedEvent) -> Result<Vec<u8>, IngestError>
             string_optional(event.api.as_deref()),
             string_optional(event.content_id.as_deref()),
             string_optional(event.event_type.as_deref()),
+            string_optional(event.event_kind.as_deref()),
             string_optional(event.old_status.as_deref()),
             string_optional(event.new_status.as_deref()),
             timestamp_optional(event.old_updated_at),
             timestamp_optional(event.new_updated_at),
-            string_optional(event.title.as_deref()),
+            timestamp_optional(event.content_created_at),
+            timestamp_optional(event.content_published_at),
             string_required(&event.raw_payload),
         ],
     )
@@ -421,10 +510,47 @@ mod tests {
           "id": "content-id",
           "type": "edit",
           "contents": {
-            "old": {"status": "DRAFT", "updatedAt": "2026-06-28T12:00:00Z", "title": "Old title"},
-            "new": {"status": "PUBLISH", "updatedAt": "2026-06-29T12:00:00Z", "title": "Example title"}
+            "old": {"status": "DRAFT", "updatedAt": "2026-06-28T12:00:00Z"},
+            "new": {"status": "PUBLISH", "updatedAt": "2026-06-29T12:00:00Z"}
           }
         }"#
+    }
+
+    fn body_with_statuses(
+        event_type: &str,
+        old_status: Option<&str>,
+        new_status: Option<&str>,
+    ) -> Vec<u8> {
+        let old = old_status
+            .map(|status| format!(r#"{{"status": {status}}}"#))
+            .unwrap_or_else(|| "null".to_owned());
+        let new = new_status
+            .map(|status| {
+                format!(
+                    r#"{{
+                      "status": {status},
+                      "publishValue": {{
+                        "createdAt": "2026-06-27T12:00:00Z",
+                        "publishedAt": "2026-06-29T12:00:00Z"
+                      }}
+                    }}"#
+                )
+            })
+            .unwrap_or_else(|| "null".to_owned());
+
+        format!(
+            r#"{{
+              "service": "example-service",
+              "api": "blogs",
+              "id": "content-id",
+              "type": "{event_type}",
+              "contents": {{
+                "old": {old},
+                "new": {new}
+              }}
+            }}"#
+        )
+        .into_bytes()
     }
 
     #[test]
@@ -455,11 +581,68 @@ mod tests {
         assert_eq!(event.event_type.as_deref(), Some("edit"));
         assert_eq!(event.old_status.as_deref(), Some("DRAFT"));
         assert_eq!(event.new_status.as_deref(), Some("PUBLISH"));
-        assert_eq!(event.title.as_deref(), Some("Example title"));
         assert_eq!(
             event.new_updated_at.unwrap().to_rfc3339(),
             "2026-06-29T12:00:00+00:00"
         );
+    }
+
+    #[test]
+    fn normalizes_status_arrays_event_kind_and_publish_timestamps() {
+        let received_at = DateTime::parse_from_rfc3339("2026-06-29T01:02:03Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let body = body_with_statuses("edit", Some(r#"["DRAFT"]"#), Some(r#"["PUBLISH"]"#));
+        let event = normalize_payload(&body, received_at).unwrap();
+
+        assert_eq!(event.old_status.as_deref(), Some("DRAFT"));
+        assert_eq!(event.new_status.as_deref(), Some("PUBLISH"));
+        assert_eq!(event.event_kind.as_deref(), Some("FIRST_PUBLISH"));
+        assert_eq!(
+            event.content_created_at.unwrap().to_rfc3339(),
+            "2026-06-27T12:00:00+00:00"
+        );
+        assert_eq!(
+            event.content_published_at.unwrap().to_rfc3339(),
+            "2026-06-29T12:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn derives_event_kind_for_supported_content_transitions() {
+        let received_at = DateTime::parse_from_rfc3339("2026-06-29T01:02:03Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let cases = [
+            ("new", None, Some(r#"["DRAFT"]"#), Some("CREATE_DRAFT")),
+            ("new", None, Some(r#"["PUBLISH"]"#), Some("CREATE_PUBLISH")),
+            (
+                "edit",
+                Some(r#"["DRAFT"]"#),
+                Some(r#"["PUBLISH"]"#),
+                Some("FIRST_PUBLISH"),
+            ),
+            (
+                "edit",
+                Some(r#"["PUBLISH"]"#),
+                Some(r#"["PUBLISH"]"#),
+                Some("UPDATE_PUBLISH"),
+            ),
+            (
+                "edit",
+                Some(r#"["PUBLISH"]"#),
+                Some(r#"["DRAFT"]"#),
+                Some("UNPUBLISH"),
+            ),
+            ("delete", Some(r#"["PUBLISH"]"#), None, Some("DELETE")),
+            ("edit", Some(r#"["DRAFT"]"#), Some(r#"["DRAFT"]"#), None),
+        ];
+
+        for (event_type, old_status, new_status, expected) in cases {
+            let body = body_with_statuses(event_type, old_status, new_status);
+            let event = normalize_payload(&body, received_at).unwrap();
+            assert_eq!(event.event_kind.as_deref(), expected);
+        }
     }
 
     #[test]
@@ -492,6 +675,13 @@ mod tests {
         let builder = ParquetRecordBatchReaderBuilder::try_new(Bytes::from(parquet)).unwrap();
         let mut reader = builder.build().unwrap();
         let batch = reader.next().unwrap().unwrap();
+        assert!(
+            !batch
+                .schema()
+                .fields()
+                .iter()
+                .any(|field| field.name() == "title")
+        );
 
         let received_at = batch
             .column(0)
@@ -506,6 +696,13 @@ mod tests {
             .downcast_ref::<StringArray>()
             .unwrap();
         assert_eq!(api.value(0), "blogs");
+
+        let event_kind = batch
+            .column(5)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        assert_eq!(event_kind.value(0), "FIRST_PUBLISH");
         assert_eq!(batch.num_rows(), 1);
     }
 }

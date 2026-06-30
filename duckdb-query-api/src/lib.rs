@@ -50,7 +50,7 @@ struct DaysQuery {
 }
 
 #[derive(Debug, Deserialize)]
-struct TopEditedQuery {
+struct LimitedQuery {
     days: Option<u32>,
     limit: Option<u32>,
 }
@@ -61,35 +61,35 @@ struct HealthResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct DailyEventsRow {
+pub struct CalendarHeatmapRow {
     pub dt: String,
-    pub api: Option<String>,
-    pub event_type: Option<String>,
     pub event_count: i64,
+    pub bucket: String,
+    pub color: String,
+    pub label: String,
 }
 
 #[derive(Debug, Serialize)]
-pub struct EventsByApiRow {
+pub struct ApiActivityRow {
     pub api: Option<String>,
-    pub event_count: i64,
-    pub content_count: i64,
+    pub new_count: i64,
+    pub edit_count: i64,
+    pub delete_count: i64,
+    pub total_count: i64,
 }
 
 #[derive(Debug, Serialize)]
-pub struct TopEditedContentRow {
+pub struct TopUpdatedContentRow {
     pub api: Option<String>,
     pub content_id: Option<String>,
-    pub title: Option<String>,
-    pub edit_count: i64,
+    pub count: i64,
     pub last_event_at: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct StatusEventsRow {
-    pub dt: String,
+pub struct AverageTimeToPublishRow {
     pub api: Option<String>,
-    pub status: Option<String>,
-    pub event_count: i64,
+    pub avg_days: f64,
 }
 
 impl AppConfig {
@@ -150,10 +150,13 @@ pub fn app(config: AppConfig) -> Router {
 
     Router::new()
         .route("/health", get(health))
-        .route("/metrics/daily-events", get(daily_events))
-        .route("/metrics/events-by-api", get(events_by_api))
-        .route("/metrics/top-edited-contents", get(top_edited_contents))
-        .route("/metrics/status-events", get(status_events))
+        .route("/metrics/calendar-heatmap", get(calendar_heatmap))
+        .route("/metrics/api-activity", get(api_activity))
+        .route("/metrics/top-updated-contents", get(top_updated_contents))
+        .route(
+            "/metrics/average-time-to-publish-by-api",
+            get(average_time_to_publish_by_api),
+        )
         .with_state(state)
 }
 
@@ -161,148 +164,219 @@ async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { ok: true })
 }
 
-async fn daily_events(
+async fn calendar_heatmap(
     State(state): State<AppState>,
     Query(query): Query<DaysQuery>,
-) -> Result<Json<Vec<DailyEventsRow>>, ApiError> {
-    let days = validate_days(query.days)?;
+) -> Result<Json<Vec<CalendarHeatmapRow>>, ApiError> {
+    let days = validate_days_with_default(query.days, 365)?;
     query_duckdb(state, move |connection, events_sql| {
-        let sql = format!(
-            r#"
-            SELECT
-              CAST(dt AS VARCHAR) AS dt,
-              api,
-              event_type,
-              COUNT(*) AS event_count
-            FROM {events_sql}
-            WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) - INTERVAL '{days} DAY' AS DATE)
-            GROUP BY dt, api, event_type
-            ORDER BY dt, api, event_type
-            "#
-        );
-
-        let mut statement = connection.prepare(&sql)?;
-        let rows = statement.query_map([], |row| {
-            Ok(DailyEventsRow {
-                dt: row.get(0)?,
-                api: row.get(1)?,
-                event_type: row.get(2)?,
-                event_count: row.get(3)?,
-            })
-        })?;
-        collect_rows(rows)
+        query_calendar_heatmap_rows(connection, events_sql, days)
     })
     .await
     .map(Json)
 }
 
-async fn events_by_api(
+async fn api_activity(
     State(state): State<AppState>,
     Query(query): Query<DaysQuery>,
-) -> Result<Json<Vec<EventsByApiRow>>, ApiError> {
+) -> Result<Json<Vec<ApiActivityRow>>, ApiError> {
     let days = validate_days(query.days)?;
     query_duckdb(state, move |connection, events_sql| {
-        let sql = format!(
-            r#"
-            SELECT
-              api,
-              COUNT(*) AS event_count,
-              COUNT(DISTINCT content_id) AS content_count
-            FROM {events_sql}
-            WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) - INTERVAL '{days} DAY' AS DATE)
-            GROUP BY api
-            ORDER BY event_count DESC
-            "#
-        );
-
-        let mut statement = connection.prepare(&sql)?;
-        let rows = statement.query_map([], |row| {
-            Ok(EventsByApiRow {
-                api: row.get(0)?,
-                event_count: row.get(1)?,
-                content_count: row.get(2)?,
-            })
-        })?;
-        collect_rows(rows)
+        query_api_activity_rows(connection, events_sql, days)
     })
     .await
     .map(Json)
 }
 
-async fn top_edited_contents(
+async fn top_updated_contents(
     State(state): State<AppState>,
-    Query(query): Query<TopEditedQuery>,
-) -> Result<Json<Vec<TopEditedContentRow>>, ApiError> {
+    Query(query): Query<LimitedQuery>,
+) -> Result<Json<Vec<TopUpdatedContentRow>>, ApiError> {
     let days = validate_days(query.days)?;
     let limit = validate_limit(query.limit)?;
     query_duckdb(state, move |connection, events_sql| {
-        let sql = format!(
-            r#"
-            SELECT
-              api,
-              content_id,
-              any_value(title) AS title,
-              COUNT(*) AS edit_count,
-              CAST(MAX(received_at) AS VARCHAR) AS last_event_at
-            FROM {events_sql}
-            WHERE
-              dt >= CAST(CAST(current_timestamp AS TIMESTAMP) - INTERVAL '{days} DAY' AS DATE)
-              AND event_type = 'edit'
-            GROUP BY api, content_id
-            ORDER BY edit_count DESC, last_event_at DESC
-            LIMIT {limit}
-            "#
-        );
-
-        let mut statement = connection.prepare(&sql)?;
-        let rows = statement.query_map([], |row| {
-            Ok(TopEditedContentRow {
-                api: row.get(0)?,
-                content_id: row.get(1)?,
-                title: row.get(2)?,
-                edit_count: row.get(3)?,
-                last_event_at: row.get(4)?,
-            })
-        })?;
-        collect_rows(rows)
+        query_top_updated_contents_rows(connection, events_sql, days, limit)
     })
     .await
     .map(Json)
 }
 
-async fn status_events(
+async fn average_time_to_publish_by_api(
     State(state): State<AppState>,
     Query(query): Query<DaysQuery>,
-) -> Result<Json<Vec<StatusEventsRow>>, ApiError> {
+) -> Result<Json<Vec<AverageTimeToPublishRow>>, ApiError> {
     let days = validate_days(query.days)?;
     query_duckdb(state, move |connection, events_sql| {
-        let sql = format!(
-            r#"
-            SELECT
-              CAST(dt AS VARCHAR) AS dt,
-              api,
-              new_status AS status,
-              COUNT(*) AS event_count
-            FROM {events_sql}
-            WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) - INTERVAL '{days} DAY' AS DATE)
-            GROUP BY dt, api, new_status
-            ORDER BY dt, api, new_status
-            "#
-        );
-
-        let mut statement = connection.prepare(&sql)?;
-        let rows = statement.query_map([], |row| {
-            Ok(StatusEventsRow {
-                dt: row.get(0)?,
-                api: row.get(1)?,
-                status: row.get(2)?,
-                event_count: row.get(3)?,
-            })
-        })?;
-        collect_rows(rows)
+        query_average_time_to_publish_rows(connection, events_sql, days)
     })
     .await
     .map(Json)
+}
+
+fn query_calendar_heatmap_rows(
+    connection: &Connection,
+    events_sql: &str,
+    days: u32,
+) -> duckdb::Result<Vec<CalendarHeatmapRow>> {
+    let days_minus_one = days - 1;
+    let sql = format!(
+        r#"
+        WITH calendar AS (
+          SELECT CAST(day AS DATE) AS dt
+          FROM generate_series(
+            CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE) - INTERVAL '{days_minus_one} DAY',
+            CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE),
+            INTERVAL 1 DAY
+          ) AS series(day)
+        ),
+        daily AS (
+          SELECT
+            dt,
+            COUNT(*) AS event_count
+          FROM {events_sql}
+          WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE) - INTERVAL '{days_minus_one} DAY'
+          GROUP BY dt
+        )
+        SELECT
+          CAST(calendar.dt AS VARCHAR) AS dt,
+          COALESCE(daily.event_count, 0) AS event_count,
+          CASE
+            WHEN COALESCE(daily.event_count, 0) = 0 THEN '0'
+            WHEN COALESCE(daily.event_count, 0) <= 5 THEN '1-5'
+            WHEN COALESCE(daily.event_count, 0) <= 10 THEN '6-10'
+            ELSE '10+'
+          END AS bucket,
+          CASE
+            WHEN COALESCE(daily.event_count, 0) = 0 THEN '#ebedf0'
+            WHEN COALESCE(daily.event_count, 0) <= 5 THEN '#9be9a8'
+            WHEN COALESCE(daily.event_count, 0) <= 10 THEN '#40c463'
+            ELSE '#216e39'
+          END AS color,
+          CONCAT(
+            CAST(COALESCE(daily.event_count, 0) AS VARCHAR),
+            CASE WHEN COALESCE(daily.event_count, 0) = 1 THEN ' event' ELSE ' events' END
+          ) AS label
+        FROM calendar
+        LEFT JOIN daily ON daily.dt = calendar.dt
+        ORDER BY calendar.dt
+        "#
+    );
+
+    let mut statement = connection.prepare(&sql)?;
+    let rows = statement.query_map([], |row| {
+        Ok(CalendarHeatmapRow {
+            dt: row.get(0)?,
+            event_count: row.get(1)?,
+            bucket: row.get(2)?,
+            color: row.get(3)?,
+            label: row.get(4)?,
+        })
+    })?;
+    collect_rows(rows)
+}
+
+fn query_api_activity_rows(
+    connection: &Connection,
+    events_sql: &str,
+    days: u32,
+) -> duckdb::Result<Vec<ApiActivityRow>> {
+    let days_minus_one = days - 1;
+    let sql = format!(
+        r#"
+        SELECT
+          api,
+          SUM(CASE WHEN event_type = 'new' THEN 1 ELSE 0 END) AS new_count,
+          SUM(CASE WHEN event_type = 'edit' THEN 1 ELSE 0 END) AS edit_count,
+          SUM(CASE WHEN event_type = 'delete' THEN 1 ELSE 0 END) AS delete_count,
+          COUNT(*) AS total_count
+        FROM {events_sql}
+        WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE) - INTERVAL '{days_minus_one} DAY'
+        GROUP BY api
+        ORDER BY total_count DESC, api
+        "#
+    );
+
+    let mut statement = connection.prepare(&sql)?;
+    let rows = statement.query_map([], |row| {
+        Ok(ApiActivityRow {
+            api: row.get(0)?,
+            new_count: row.get(1)?,
+            edit_count: row.get(2)?,
+            delete_count: row.get(3)?,
+            total_count: row.get(4)?,
+        })
+    })?;
+    collect_rows(rows)
+}
+
+fn query_top_updated_contents_rows(
+    connection: &Connection,
+    events_sql: &str,
+    days: u32,
+    limit: u32,
+) -> duckdb::Result<Vec<TopUpdatedContentRow>> {
+    let days_minus_one = days - 1;
+    let sql = format!(
+        r#"
+        SELECT
+          api,
+          content_id,
+          COUNT(*) AS count,
+          CAST(MAX(received_at) AS VARCHAR) AS last_event_at
+        FROM {events_sql}
+        WHERE
+          dt >= CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE) - INTERVAL '{days_minus_one} DAY'
+          AND event_type IN ('new', 'edit')
+          AND content_id IS NOT NULL
+        GROUP BY api, content_id
+        ORDER BY count DESC, last_event_at DESC
+        LIMIT {limit}
+        "#
+    );
+
+    let mut statement = connection.prepare(&sql)?;
+    let rows = statement.query_map([], |row| {
+        Ok(TopUpdatedContentRow {
+            api: row.get(0)?,
+            content_id: row.get(1)?,
+            count: row.get(2)?,
+            last_event_at: row.get(3)?,
+        })
+    })?;
+    collect_rows(rows)
+}
+
+fn query_average_time_to_publish_rows(
+    connection: &Connection,
+    events_sql: &str,
+    days: u32,
+) -> duckdb::Result<Vec<AverageTimeToPublishRow>> {
+    let days_minus_one = days - 1;
+    let sql = format!(
+        r#"
+        SELECT
+          api,
+          AVG(date_diff('second', content_created_at, content_published_at) / 86400.0) AS avg_days
+        FROM {events_sql}
+        WHERE
+          dt >= CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE) - INTERVAL '{days_minus_one} DAY'
+          AND event_kind IN ('CREATE_PUBLISH', 'FIRST_PUBLISH')
+          AND content_created_at IS NOT NULL
+          AND content_published_at IS NOT NULL
+          AND content_published_at >= content_created_at
+        GROUP BY api
+        ORDER BY avg_days DESC, api
+        "#
+    );
+
+    let mut statement = connection.prepare(&sql)?;
+    let rows = statement.query_map([], |row| {
+        Ok(AverageTimeToPublishRow {
+            api: row.get(0)?,
+            avg_days: row.get(1)?,
+        })
+    })?;
+    collect_rows(rows)
 }
 
 async fn query_duckdb<T, F>(state: AppState, query: F) -> Result<T, ApiError>
@@ -410,7 +484,11 @@ fn sql_string_literal(value: &str) -> String {
 }
 
 fn validate_days(days: Option<u32>) -> Result<u32, ApiError> {
-    let days = days.unwrap_or(30);
+    validate_days_with_default(days, 30)
+}
+
+fn validate_days_with_default(days: Option<u32>, default: u32) -> Result<u32, ApiError> {
+    let days = days.unwrap_or(default);
     if (1..=3660).contains(&days) {
         Ok(days)
     } else {
@@ -459,6 +537,7 @@ mod tests {
     #[test]
     fn validates_days() {
         assert_eq!(validate_days(None).unwrap(), 30);
+        assert_eq!(validate_days_with_default(None, 365).unwrap(), 365);
         assert_eq!(validate_days(Some(1)).unwrap(), 1);
         assert_eq!(validate_days(Some(3660)).unwrap(), 3660);
         assert!(validate_days(Some(0)).is_err());
@@ -499,14 +578,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn queries_local_hive_partitioned_parquet() {
+    async fn queries_refreshed_metrics_from_local_hive_partitioned_parquet() {
         let tempdir = tempdir().unwrap();
         let partition_dir = tempdir
             .path()
             .join("microcms_events/service=example-service/api=blogs/dt=2026-06-29");
+        let authors_partition_dir = tempdir
+            .path()
+            .join("microcms_events/service=example-service/api=authors/dt=2026-06-29");
         fs::create_dir_all(&partition_dir).unwrap();
+        fs::create_dir_all(&authors_partition_dir).unwrap();
         let parquet_path = partition_dir.join("events.parquet");
+        let authors_parquet_path = authors_partition_dir.join("events.parquet");
         let parquet_path_sql = sql_string_literal(&parquet_path.to_string_lossy());
+        let authors_parquet_path_sql = sql_string_literal(&authors_parquet_path.to_string_lossy());
         let extension_dir = tempdir.path().join("duckdb_extensions");
         let extension_dir_sql = sql_string_literal(&extension_dir.to_string_lossy());
 
@@ -523,12 +608,14 @@ mod tests {
                     'example-service' AS service,
                     'blogs' AS api,
                     'content-1' AS content_id,
+                    'FIRST_PUBLISH' AS event_kind,
                     'edit' AS event_type,
                     'DRAFT' AS old_status,
                     'PUBLISH' AS new_status,
                     TIMESTAMP '2026-06-28 12:00:00' AS old_updated_at,
                     TIMESTAMP '2026-06-29 12:00:00' AS new_updated_at,
-                    'Title 1' AS title,
+                    TIMESTAMP '2026-06-27 12:00:00' AS content_created_at,
+                    TIMESTAMP '2026-06-29 12:00:00' AS content_published_at,
                     '{{}}' AS raw_payload
                   UNION ALL
                   SELECT
@@ -536,14 +623,48 @@ mod tests {
                     'example-service',
                     'blogs',
                     'content-1',
+                    'UPDATE_PUBLISH',
                     'edit',
                     'PUBLISH',
                     'PUBLISH',
                     TIMESTAMP '2026-06-29 12:00:00',
                     TIMESTAMP '2026-06-29 13:00:00',
-                    'Title 1',
+                    NULL,
+                    NULL,
                     '{{}}'
-                ) TO '{parquet_path_sql}' (FORMAT PARQUET)
+                  UNION ALL
+                  SELECT
+                    TIMESTAMP '2026-06-29 14:00:00',
+                    'example-service',
+                    'blogs',
+                    'content-2',
+                    'CREATE_PUBLISH',
+                    'new',
+                    NULL,
+                    'PUBLISH',
+                    NULL,
+                    TIMESTAMP '2026-06-29 14:00:00',
+                    TIMESTAMP '2026-06-29 08:00:00',
+                    TIMESTAMP '2026-06-29 14:00:00',
+                    '{{}}'
+                ) TO '{parquet_path_sql}' (FORMAT PARQUET);
+
+                COPY (
+                  SELECT
+                    TIMESTAMP '2026-06-29 15:00:00' AS received_at,
+                    'example-service' AS service,
+                    'authors' AS api,
+                    NULL AS content_id,
+                    'DELETE' AS event_kind,
+                    'delete' AS event_type,
+                    'PUBLISH' AS old_status,
+                    NULL AS new_status,
+                    TIMESTAMP '2026-06-29 15:00:00' AS old_updated_at,
+                    NULL AS new_updated_at,
+                    NULL AS content_created_at,
+                    NULL AS content_published_at,
+                    '{{}}' AS raw_payload
+                ) TO '{authors_parquet_path_sql}' (FORMAT PARQUET)
                 "#
             ))
             .unwrap();
@@ -558,35 +679,46 @@ mod tests {
             duckdb_s3_use_ssl: true,
         };
 
-        let rows = query_duckdb(state, move |connection, events_sql| {
-            let sql = format!(
-                r#"
-                SELECT
-                  api,
-                  COUNT(*) AS event_count,
-                  COUNT(DISTINCT content_id) AS content_count
-                FROM {events_sql}
-                WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) - INTERVAL '3660 DAY' AS DATE)
-                GROUP BY api
-                ORDER BY event_count DESC
-                "#
-            );
-            let mut statement = connection.prepare(&sql)?;
-            let rows = statement.query_map([], |row| {
-                Ok(EventsByApiRow {
-                    api: row.get(0)?,
-                    event_count: row.get(1)?,
-                    content_count: row.get(2)?,
-                })
-            })?;
-            collect_rows(rows)
-        })
-        .await
-        .unwrap();
+        let (calendar, activity, top_contents, publish_duration) =
+            query_duckdb(state, move |connection, events_sql| {
+                Ok((
+                    query_calendar_heatmap_rows(connection, events_sql, 4)?,
+                    query_api_activity_rows(connection, events_sql, 4)?,
+                    query_top_updated_contents_rows(connection, events_sql, 4, 20)?,
+                    query_average_time_to_publish_rows(connection, events_sql, 4)?,
+                ))
+            })
+            .await
+            .unwrap();
 
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].api.as_deref(), Some("blogs"));
-        assert_eq!(rows[0].event_count, 2);
-        assert_eq!(rows[0].content_count, 1);
+        assert!(calendar.iter().any(|row| {
+            row.dt == "2026-06-28"
+                && row.event_count == 0
+                && row.bucket == "0"
+                && row.label == "0 events"
+        }));
+        assert!(
+            calendar.iter().any(|row| {
+                row.dt == "2026-06-29" && row.event_count == 4 && row.bucket == "1-5"
+            })
+        );
+
+        assert_eq!(activity.len(), 2);
+        assert_eq!(activity[0].api.as_deref(), Some("blogs"));
+        assert_eq!(activity[0].new_count, 1);
+        assert_eq!(activity[0].edit_count, 2);
+        assert_eq!(activity[0].delete_count, 0);
+        assert_eq!(activity[0].total_count, 3);
+        assert_eq!(activity[1].api.as_deref(), Some("authors"));
+        assert_eq!(activity[1].delete_count, 1);
+
+        assert_eq!(top_contents.len(), 2);
+        assert_eq!(top_contents[0].api.as_deref(), Some("blogs"));
+        assert_eq!(top_contents[0].content_id.as_deref(), Some("content-1"));
+        assert_eq!(top_contents[0].count, 2);
+
+        assert_eq!(publish_duration.len(), 1);
+        assert_eq!(publish_duration[0].api.as_deref(), Some("blogs"));
+        assert_eq!(publish_duration[0].avg_days, 1.125);
     }
 }

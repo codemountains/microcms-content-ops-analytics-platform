@@ -14,26 +14,51 @@
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#ebedf0",
+                "value": null
+              },
+              {
+                "color": "#9be9a8",
+                "value": 1
+              },
+              {
+                "color": "#40c463",
+                "value": 6
+              },
+              {
+                "color": "#216e39",
+                "value": 11
+              }
+            ]
+          }
+        },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 9,
+        "w": 24,
         "x": 0,
         "y": 0
       },
       "id": 1,
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "calendarView": "dayGridMonth",
+        "colors": {
+          "field": "color"
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "descriptionField": "bucket",
+        "endTimeField": "dt",
+        "startTimeField": "dt",
+        "textField": "label",
+        "titleField": "label"
       },
       "targets": [
         {
@@ -47,79 +72,31 @@
               "jsonPath": "$[*].event_count",
               "name": "event_count",
               "type": "number"
-            }
-          ],
-          "method": "GET",
-          "params": [
-            [
-              "days",
-              "30"
-            ]
-          ],
-          "queryParams": "days=30",
-          "refId": "A",
-          "urlPath": "/metrics/daily-events"
-        }
-      ],
-      "title": "Daily Webhook Events",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "marcusolsson-json-datasource",
-        "uid": "duckdb-query-api"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
-      "id": 2,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "orientation": "auto",
-        "showValue": "auto",
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "fields": [
+            },
             {
-              "jsonPath": "$[*].api",
-              "name": "api",
+              "jsonPath": "$[*].bucket",
+              "name": "bucket",
               "type": "string"
             },
             {
-              "jsonPath": "$[*].event_count",
-              "name": "event_count",
-              "type": "number"
+              "jsonPath": "$[*].color",
+              "name": "color",
+              "type": "string"
             },
             {
-              "jsonPath": "$[*].content_count",
-              "name": "content_count",
-              "type": "number"
+              "jsonPath": "$[*].label",
+              "name": "label",
+              "type": "string"
             }
           ],
           "method": "GET",
-          "queryParams": "days=30",
+          "queryParams": "days=365",
           "refId": "A",
-          "urlPath": "/metrics/events-by-api"
+          "urlPath": "/metrics/calendar-heatmap"
         }
       ],
-      "title": "Events by API",
-      "type": "barchart"
+      "title": "Calendar Heatmap",
+      "type": "marcusolsson-calendar-panel"
     },
     {
       "datasource": {
@@ -134,7 +111,70 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 9
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "normal",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "fields": [
+            {
+              "jsonPath": "$[*].api",
+              "name": "api",
+              "type": "string"
+            },
+            {
+              "jsonPath": "$[*].new_count",
+              "name": "new",
+              "type": "number"
+            },
+            {
+              "jsonPath": "$[*].edit_count",
+              "name": "edit",
+              "type": "number"
+            },
+            {
+              "jsonPath": "$[*].delete_count",
+              "name": "delete",
+              "type": "number"
+            }
+          ],
+          "method": "GET",
+          "queryParams": "days=30",
+          "refId": "A",
+          "urlPath": "/metrics/api-activity"
+        }
+      ],
+      "title": "API Activity",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "marcusolsson-json-datasource",
+        "uid": "duckdb-query-api"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 9
       },
       "id": 3,
       "options": {
@@ -154,13 +194,8 @@
               "type": "string"
             },
             {
-              "jsonPath": "$[*].title",
-              "name": "title",
-              "type": "string"
-            },
-            {
-              "jsonPath": "$[*].edit_count",
-              "name": "edit_count",
+              "jsonPath": "$[*].count",
+              "name": "count",
               "type": "number"
             },
             {
@@ -172,10 +207,10 @@
           "method": "GET",
           "queryParams": "days=30&limit=20",
           "refId": "A",
-          "urlPath": "/metrics/top-edited-contents"
+          "urlPath": "/metrics/top-updated-contents"
         }
       ],
-      "title": "Top Edited Contents",
+      "title": "Top Updated Contents",
       "type": "table"
     },
     {
@@ -184,24 +219,43 @@
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "d"
+        },
         "overrides": []
       },
       "gridPos": {
         "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 8
+        "w": 24,
+        "x": 0,
+        "y": 18
       },
       "id": 4,
       "options": {
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
-        "orientation": "auto",
-        "showValue": "auto",
+        "orientation": "horizontal",
+        "showValue": "always",
         "tooltip": {
           "mode": "single",
           "sort": "none"
@@ -211,28 +265,23 @@
         {
           "fields": [
             {
-              "jsonPath": "$[*].dt",
-              "name": "dt",
-              "type": "time"
-            },
-            {
-              "jsonPath": "$[*].status",
-              "name": "status",
+              "jsonPath": "$[*].api",
+              "name": "api",
               "type": "string"
             },
             {
-              "jsonPath": "$[*].event_count",
-              "name": "event_count",
+              "jsonPath": "$[*].avg_days",
+              "name": "avg_days",
               "type": "number"
             }
           ],
           "method": "GET",
           "queryParams": "days=30",
           "refId": "A",
-          "urlPath": "/metrics/status-events"
+          "urlPath": "/metrics/average-time-to-publish-by-api"
         }
       ],
-      "title": "Status Events",
+      "title": "Average Time to Publish by API",
       "type": "barchart"
     }
   ],
@@ -254,5 +303,5 @@
   "timezone": "browser",
   "title": "microCMS Content Ops Analytics",
   "uid": "microcms-content-ops",
-  "version": 2
+  "version": 3
 }

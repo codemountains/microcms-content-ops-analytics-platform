@@ -122,7 +122,7 @@ ALB 作成直後は ECS task の起動と ALB health check に少し時間がか
 ```bash
 QUERY_API_URL="$(tofu -chdir=infra/aws output -raw query_api_url)"
 curl "$QUERY_API_URL/health"
-curl "$QUERY_API_URL/metrics/daily-events"
+curl "$QUERY_API_URL/metrics/calendar-heatmap"
 ```
 
 Grafana から見る場合は、ローカル Grafana の datasource URL を `query_api_url` に変更します。

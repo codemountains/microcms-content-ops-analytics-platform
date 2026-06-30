@@ -79,6 +79,9 @@ override.tf.json
 docker-compose.override.yml
 compose.override.yml
 
+# Local debug artifacts
+.debug/
+
 # ngrok personal config (shared template: ngrok.local.yml)
 ngrok.yml
 !ngrok.local.yml
