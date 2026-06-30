@@ -565,7 +565,7 @@ Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキ
 ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
 Top Updated Contents は API response の `count` field を Table 上では `updated_count` として表示し、`last_event_at` は field override で `dateTimeAsLocal` 表示とする。
 Average Time to Publish by API は green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。
-Average Draft to Publish by API は Average Time to Publish by API と並置し、`sample_count` を併せて取得する。
+Average Draft to Publish by API は Average Time to Publish by API と並置し、duration chart では `avg_days` のみを描画する。API response の `sample_count` は平均算出件数の確認用であり、日数 series として描画しない。
 
 ## 9. セキュリティ仕様
 

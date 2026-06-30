@@ -335,11 +335,6 @@
               "jsonPath": "$[*].avg_days",
               "name": "avg_days",
               "type": "number"
-            },
-            {
-              "jsonPath": "$[*].sample_count",
-              "name": "sample_count",
-              "type": "number"
             }
           ],
           "method": "GET",
