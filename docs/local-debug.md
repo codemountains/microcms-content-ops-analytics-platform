@@ -135,6 +135,26 @@ just debug-s3-ls
 `.parquet` ファイルが作成されていれば `webhook-ingest` の保存処理は成功です。
 まだ `just debug-webhook` を実行していない場合は、`No objects found under ...` と表示されます。
 
+`just debug-webhook` は送信後に Floci S3 の `.parquet` ファイルを `.debug/parquet/microcms_events/` に同期します。
+手動で同期したい場合は次を実行します。
+
+```bash
+just debug-parquet-persist
+```
+
+保存先を変える場合は `DEBUG_PARQUET_DIR` を指定します。
+
+```bash
+DEBUG_PARQUET_DIR=.debug/custom-parquet just debug-parquet-persist
+```
+
+debug で生成した Parquet を削除する場合は次を実行します。
+このコマンドは Floci S3 の `microcms_events/` 以下の `.parquet` と、ローカルに永続化した directory を削除します。
+
+```bash
+just debug-parquet-delete
+```
+
 ## 8. Query API と Grafana を確認する
 
 ```bash

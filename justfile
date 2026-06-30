@@ -14,6 +14,7 @@ cargo_build_jobs := env("CARGO_BUILD_JOBS", "1")
 floci_port := env("FLOCI_PORT", "4566")
 floci_endpoint := "http://localhost:" + floci_port
 floci_lambda_endpoint := env("FLOCI_LAMBDA_ENDPOINT", "http://floci:4566")
+debug_parquet_dir := env("DEBUG_PARQUET_DIR", ".debug/parquet")
 
 default:
     @just --list
@@ -80,7 +81,7 @@ debug-outputs:
 
 # Send a signed sample webhook directly to the local Floci API Gateway URL.
 debug-webhook:
-    payload='{"service":"example-service","api":"blogs","id":"content-id","type":"edit","contents":{"old":{"status":"DRAFT","updatedAt":"2026-06-28T12:00:00Z","title":"Old title"},"new":{"status":"PUBLISH","updatedAt":"2026-06-29T12:00:00Z","title":"Example title"}}}'; \
+    payload='{"service":"example-service","api":"blogs","id":"content-id","type":"edit","contents":{"old":{"status":["DRAFT"],"updatedAt":"2026-06-28T12:00:00Z"},"new":{"status":["PUBLISH"],"updatedAt":"2026-06-29T12:00:00Z","publishValue":{"createdAt":"2026-06-27T12:00:00Z","publishedAt":"2026-06-29T12:00:00Z"}}}}'; \
     secret="${MICROCMS_WEBHOOK_SECRET:-local-webhook-secret}"; \
     signature="$(printf '%s' "$payload" | openssl dgst -sha256 -hmac "$secret" -binary | xxd -p -c 256)"; \
     webhook_url="$(tofu -chdir={{local_dir}} output -raw local_webhook_url)"; \
@@ -88,14 +89,39 @@ debug-webhook:
       -H "content-type: application/json" \
       -H "x-microcms-signature: $signature" \
       --data "$payload"
+    @just debug-parquet-persist
+
+# Persist local Floci S3 Parquet objects to a git-ignored directory.
+debug-parquet-persist:
+    @mkdir -p "{{debug_parquet_dir}}"
+    @bucket="$(tofu -chdir={{local_dir}} output -raw event_bucket_name)"; \
+    AWS_ENDPOINT_URL={{floci_endpoint}} AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_REGION={{aws_region}} \
+      aws s3 sync \
+        "s3://$bucket/microcms_events/" \
+        "{{debug_parquet_dir}}/microcms_events/" \
+        --exclude "*" \
+        --include "*.parquet"; \
+    echo "Persisted debug Parquet files under {{debug_parquet_dir}}/microcms_events/."
+
+# Delete debug-generated Parquet files from local Floci S3 and the persisted directory.
+debug-parquet-delete:
+    @dir="{{debug_parquet_dir}}"; \
+    case "$dir" in ""|"/"|"."|".."|"-"*) echo "Refusing to delete unsafe DEBUG_PARQUET_DIR: '$dir'" >&2; exit 1;; esac; \
+    bucket="$(tofu -chdir={{local_dir}} output -raw event_bucket_name 2>/dev/null || true)"; \
+    if [ -n "$bucket" ]; then \
+      AWS_ENDPOINT_URL={{floci_endpoint}} AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_REGION={{aws_region}} \
+        aws s3 rm "s3://$bucket/microcms_events/" --recursive --exclude "*" --include "*.parquet" || true; \
+    fi; \
+    if [ -d "$dir" ]; then rm -rf "$dir"; fi; \
+    echo "Deleted debug Parquet files from local Floci S3 and $dir."
 
 # Call local Query API health and metrics endpoints.
 debug-metrics:
     curl http://localhost:8000/health
-    curl "http://localhost:8000/metrics/daily-events?days=3660"
-    curl "http://localhost:8000/metrics/events-by-api?days=3660"
-    curl "http://localhost:8000/metrics/top-edited-contents?days=3660&limit=20"
-    curl "http://localhost:8000/metrics/status-events?days=3660"
+    curl "http://localhost:8000/metrics/calendar-heatmap?days=365"
+    curl "http://localhost:8000/metrics/api-activity?days=3660"
+    curl "http://localhost:8000/metrics/top-updated-contents?days=3660&limit=20"
+    curl "http://localhost:8000/metrics/average-time-to-publish-by-api?days=3660"
 
 # List local Floci S3 event objects.
 debug-s3-ls:

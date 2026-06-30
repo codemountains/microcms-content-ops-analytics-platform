@@ -106,12 +106,14 @@ s3://<bucket>/microcms_events/
 | `service` | string | microCMS のサービス ID |
 | `api` | string | microCMS の API ID |
 | `content_id` | string | コンテンツ ID |
-| `event_type` | string | Webhook イベント種別 |
+| `event_type` | string | microCMS Webhook の `type` (`new` / `edit` / `delete`) |
+| `event_kind` | string | 公開状態の変化を加味した分析用イベント分類 |
 | `old_status` | string | 変更前ステータス |
 | `new_status` | string | 変更後ステータス |
 | `old_updated_at` | timestamp | 変更前コンテンツの更新日時 |
 | `new_updated_at` | timestamp | 変更後コンテンツの更新日時 |
-| `title` | string | コンテンツタイトル |
+| `content_created_at` | timestamp | `contents.new.publishValue.createdAt` |
+| `content_published_at` | timestamp | `contents.new.publishValue.publishedAt` |
 | `raw_payload` | string | Webhook payload の原文 |
 
 ## `webhook-ingest`
@@ -141,10 +143,10 @@ s3://<bucket>/microcms_events/
 
 ```text
 GET /health
-GET /metrics/daily-events
-GET /metrics/events-by-api
-GET /metrics/top-edited-contents
-GET /metrics/status-events
+GET /metrics/calendar-heatmap
+GET /metrics/api-activity
+GET /metrics/top-updated-contents
+GET /metrics/average-time-to-publish-by-api
 ```
 
 任意 SQL を受け付ける API は初期実装では提供しません。
@@ -240,6 +242,8 @@ just check
 | `just check` | format、test、clippy、validate を一括実行 |
 | `just debug` | Floci/ngrok/Grafana を使うローカルデバッグ環境を起動 |
 | `just debug-webhook` | ローカル API Gateway に署名付き sample webhook を送信 |
+| `just debug-parquet-persist` | Floci S3 の debug Parquet を `.debug/parquet/` に保存 |
+| `just debug-parquet-delete` | debug で生成した Parquet を削除 |
 | `just debug-metrics` | Query API の health/metrics を確認 |
 | `just deploy-all` | ECR bootstrap、image build/push、AWS deploy を一括実行 |
 | `just deploy-plan` | 実 AWS 向け OpenTofu plan |
@@ -259,10 +263,10 @@ docker compose up --build
 | URL | 用途 |
 | --- | --- |
 | `http://localhost:8000/health` | DuckDB Query API の health check |
-| `http://localhost:8000/metrics/daily-events` | 日別イベント件数 |
-| `http://localhost:8000/metrics/events-by-api` | API 別イベント件数 |
-| `http://localhost:8000/metrics/top-edited-contents` | 編集回数が多いコンテンツ |
-| `http://localhost:8000/metrics/status-events` | ステータス別イベント件数 |
+| `http://localhost:8000/metrics/calendar-heatmap` | Calendar Heatmap 用の日別イベント件数 |
+| `http://localhost:8000/metrics/api-activity` | API ごとの `new` / `edit` / `delete` 件数 |
+| `http://localhost:8000/metrics/top-updated-contents` | 更新回数が多いコンテンツ |
+| `http://localhost:8000/metrics/average-time-to-publish-by-api` | API ごとの平均公開所要日数 |
 | `http://localhost:3000` | Grafana |
 
 ## OpenTofu / ローカルデバッグ
