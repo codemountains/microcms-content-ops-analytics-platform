@@ -532,6 +532,7 @@ impl IntoResponse for ApiError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{Duration, NaiveDate};
     use tempfile::tempdir;
 
     #[test]
@@ -580,12 +581,25 @@ mod tests {
     #[tokio::test]
     async fn queries_refreshed_metrics_from_local_hive_partitioned_parquet() {
         let tempdir = tempdir().unwrap();
-        let partition_dir = tempdir
-            .path()
-            .join("microcms_events/service=example-service/api=blogs/dt=2026-06-29");
-        let authors_partition_dir = tempdir
-            .path()
-            .join("microcms_events/service=example-service/api=authors/dt=2026-06-29");
+        let connection = Connection::open_in_memory().unwrap();
+        let today: String = connection
+            .query_row(
+                "SELECT CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE)::VARCHAR",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let today = NaiveDate::parse_from_str(&today, "%Y-%m-%d").unwrap();
+        let event_date = today - Duration::days(2);
+        let zero_date = event_date - Duration::days(1);
+        let created_date = event_date - Duration::days(2);
+        let updated_before_date = event_date - Duration::days(1);
+        let partition_dir = tempdir.path().join(format!(
+            "microcms_events/service=example-service/api=blogs/dt={event_date}"
+        ));
+        let authors_partition_dir = tempdir.path().join(format!(
+            "microcms_events/service=example-service/api=authors/dt={event_date}"
+        ));
         fs::create_dir_all(&partition_dir).unwrap();
         fs::create_dir_all(&authors_partition_dir).unwrap();
         let parquet_path = partition_dir.join("events.parquet");
@@ -595,7 +609,6 @@ mod tests {
         let extension_dir = tempdir.path().join("duckdb_extensions");
         let extension_dir_sql = sql_string_literal(&extension_dir.to_string_lossy());
 
-        let connection = Connection::open_in_memory().unwrap();
         connection
             .execute_batch(&format!(
                 r#"
@@ -604,7 +617,7 @@ mod tests {
                 LOAD parquet;
                 COPY (
                   SELECT
-                    TIMESTAMP '2026-06-29 12:00:00' AS received_at,
+                    TIMESTAMP '{event_date} 12:00:00' AS received_at,
                     'example-service' AS service,
                     'blogs' AS api,
                     'content-1' AS content_id,
@@ -612,14 +625,14 @@ mod tests {
                     'edit' AS event_type,
                     'DRAFT' AS old_status,
                     'PUBLISH' AS new_status,
-                    TIMESTAMP '2026-06-28 12:00:00' AS old_updated_at,
-                    TIMESTAMP '2026-06-29 12:00:00' AS new_updated_at,
-                    TIMESTAMP '2026-06-27 12:00:00' AS content_created_at,
-                    TIMESTAMP '2026-06-29 12:00:00' AS content_published_at,
+                    TIMESTAMP '{updated_before_date} 12:00:00' AS old_updated_at,
+                    TIMESTAMP '{event_date} 12:00:00' AS new_updated_at,
+                    TIMESTAMP '{created_date} 12:00:00' AS content_created_at,
+                    TIMESTAMP '{event_date} 12:00:00' AS content_published_at,
                     '{{}}' AS raw_payload
                   UNION ALL
                   SELECT
-                    TIMESTAMP '2026-06-29 13:00:00',
+                    TIMESTAMP '{event_date} 13:00:00',
                     'example-service',
                     'blogs',
                     'content-1',
@@ -627,14 +640,14 @@ mod tests {
                     'edit',
                     'PUBLISH',
                     'PUBLISH',
-                    TIMESTAMP '2026-06-29 12:00:00',
-                    TIMESTAMP '2026-06-29 13:00:00',
+                    TIMESTAMP '{event_date} 12:00:00',
+                    TIMESTAMP '{event_date} 13:00:00',
                     NULL,
                     NULL,
                     '{{}}'
                   UNION ALL
                   SELECT
-                    TIMESTAMP '2026-06-29 14:00:00',
+                    TIMESTAMP '{event_date} 14:00:00',
                     'example-service',
                     'blogs',
                     'content-2',
@@ -643,15 +656,15 @@ mod tests {
                     NULL,
                     'PUBLISH',
                     NULL,
-                    TIMESTAMP '2026-06-29 14:00:00',
-                    TIMESTAMP '2026-06-29 08:00:00',
-                    TIMESTAMP '2026-06-29 14:00:00',
+                    TIMESTAMP '{event_date} 14:00:00',
+                    TIMESTAMP '{event_date} 08:00:00',
+                    TIMESTAMP '{event_date} 14:00:00',
                     '{{}}'
                 ) TO '{parquet_path_sql}' (FORMAT PARQUET);
 
                 COPY (
                   SELECT
-                    TIMESTAMP '2026-06-29 15:00:00' AS received_at,
+                    TIMESTAMP '{event_date} 15:00:00' AS received_at,
                     'example-service' AS service,
                     'authors' AS api,
                     NULL AS content_id,
@@ -659,7 +672,7 @@ mod tests {
                     'delete' AS event_type,
                     'PUBLISH' AS old_status,
                     NULL AS new_status,
-                    TIMESTAMP '2026-06-29 15:00:00' AS old_updated_at,
+                    TIMESTAMP '{event_date} 15:00:00' AS old_updated_at,
                     NULL AS new_updated_at,
                     NULL AS content_created_at,
                     NULL AS content_published_at,
@@ -692,16 +705,14 @@ mod tests {
             .unwrap();
 
         assert!(calendar.iter().any(|row| {
-            row.dt == "2026-06-28"
+            row.dt == zero_date.to_string()
                 && row.event_count == 0
                 && row.bucket == "0"
                 && row.label == "0 events"
         }));
-        assert!(
-            calendar.iter().any(|row| {
-                row.dt == "2026-06-29" && row.event_count == 4 && row.bucket == "1-5"
-            })
-        );
+        assert!(calendar.iter().any(|row| {
+            row.dt == event_date.to_string() && row.event_count == 4 && row.bucket == "1-5"
+        }));
 
         assert_eq!(activity.len(), 2);
         assert_eq!(activity[0].api.as_deref(), Some("blogs"));
