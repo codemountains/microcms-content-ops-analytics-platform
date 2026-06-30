@@ -199,24 +199,25 @@ Response:
 #### `GET /metrics/calendar-heatmap`
 
 Calendar Heatmap 用の日別イベント件数を返す。
-全イベントを対象にし、0件の日も含める。
+`tim012432-calendarheatmap-panel` が消費する time-series 形式で、0件の日も含める。
 
 Query parameters:
 
 | Parameter | Default | 説明 |
 | --- | --- | --- |
-| `days` | `365` | 集計対象期間 |
+| `from` | なし | 集計開始時刻（Unix epoch ミリ秒）。`to` とセットで指定する |
+| `to` | なし | 集計終了時刻（Unix epoch ミリ秒）。`from` とセットで指定する |
+
+`from` / `to` を省略した場合は、直近 365 日を返す。
+Grafana ダッシュボードでは `${__from}` / `${__to}` を渡す。
 
 Response example:
 
 ```json
 [
   {
-    "dt": "2026-06-29",
-    "event_count": 12,
-    "bucket": "10+",
-    "color": "#216e39",
-    "label": "12 events"
+    "time": "2026-06-29T00:00:00Z",
+    "value": 12
   }
 ]
 ```
@@ -361,11 +362,16 @@ microcms_events/service=my-service/api=blogs/dt=2026-06-29/01JXXXXXXXX.parquet
 ## 7.1 Calendar Heatmap
 
 ```sql
-WITH calendar AS (
+WITH bounds AS (
+  SELECT
+    CAST(epoch_ms(<from_ms>) AS DATE) AS start_date,
+    CAST(epoch_ms(<to_ms>) AS DATE) AS end_date
+),
+calendar AS (
   SELECT CAST(day AS DATE) AS dt
   FROM generate_series(
-    current_date - INTERVAL 364 DAY,
-    current_date,
+    (SELECT start_date FROM bounds),
+    (SELECT end_date FROM bounds),
     INTERVAL 1 DAY
   ) AS series(day)
 ),
@@ -378,12 +384,14 @@ daily AS (
     hive_partitioning = true,
     union_by_name = true
   )
-  WHERE dt >= current_date - INTERVAL 364 DAY
+  WHERE
+    dt >= (SELECT start_date FROM bounds)
+    AND dt <= (SELECT end_date FROM bounds)
   GROUP BY dt
 )
 SELECT
-  CAST(calendar.dt AS VARCHAR) AS dt,
-  COALESCE(daily.event_count, 0) AS event_count
+  CONCAT(CAST(calendar.dt AS VARCHAR), 'T00:00:00Z') AS time,
+  COALESCE(daily.event_count, 0) AS value
 FROM calendar
 LEFT JOIN daily ON daily.dt = calendar.dt
 ORDER BY calendar.dt;
@@ -459,12 +467,13 @@ Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパ
 
 | パネル | API | 可視化形式 |
 | --- | --- | --- |
-| Calendar Heatmap | `/metrics/calendar-heatmap` | Calendar panel |
+| Calendar Heatmap | `/metrics/calendar-heatmap` | `tim012432-calendarheatmap-panel` |
 | API Activity | `/metrics/api-activity` | Stacked Bar Chart |
 | Top Updated Contents | `/metrics/top-updated-contents` | Table |
 | Average Time to Publish by API | `/metrics/average-time-to-publish-by-api` | Horizontal Bar Chart |
 
-Calendar Heatmap は 0件、1-5件、6-10件、10件超の bucket で色分けする。
+Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
+ダッシュボードの time range（既定 `now-365d`）を `${__from}` / `${__to}` として API に渡す。
 Average Time to Publish by API は green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。
 
 ## 9. セキュリティ仕様

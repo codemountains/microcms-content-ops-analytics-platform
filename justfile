@@ -118,7 +118,7 @@ debug-parquet-delete:
 # Call local Query API health and metrics endpoints.
 debug-metrics:
     curl http://localhost:8000/health
-    curl "http://localhost:8000/metrics/calendar-heatmap?days=365"
+    curl "http://localhost:8000/metrics/calendar-heatmap"
     curl "http://localhost:8000/metrics/api-activity?days=3660"
     curl "http://localhost:8000/metrics/top-updated-contents?days=3660&limit=20"
     curl "http://localhost:8000/metrics/average-time-to-publish-by-api?days=3660"
