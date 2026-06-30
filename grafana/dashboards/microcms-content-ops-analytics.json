@@ -171,7 +171,7 @@
             },
             {
               "jsonPath": "$[*].count",
-              "name": "count",
+              "name": "updated_count",
               "type": "number"
             },
             {

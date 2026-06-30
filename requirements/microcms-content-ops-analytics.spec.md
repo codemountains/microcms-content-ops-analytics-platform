@@ -476,7 +476,7 @@ Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパ
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
 ダッシュボードの time range（既定 `now-365d`）を `${__from}` / `${__to}` として API に渡す。
 ダッシュボード timezone は `utc` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の UTC 日付）と一致させる。
-Top Updated Contents の `last_event_at` は field override で `dateTimeAsLocal` 表示とする。
+Top Updated Contents は API response の `count` field を Table 上では `updated_count` として表示し、`last_event_at` は field override で `dateTimeAsLocal` 表示とする。
 Average Time to Publish by API は green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。
 
 ## 9. セキュリティ仕様
