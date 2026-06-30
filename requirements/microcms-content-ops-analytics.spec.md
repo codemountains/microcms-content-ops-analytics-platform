@@ -301,6 +301,31 @@ Response example:
 ]
 ```
 
+#### `GET /metrics/average-draft-to-publish-by-api`
+
+API ごとに、下書き作成 (`contents.new.draftValue.createdAt`) から初回公開 (`contents.new.publishValue.publishedAt`) までの平均所要日数を返す。
+同一 `api` / `content_id` の `CREATE_DRAFT` と `FIRST_PUBLISH` を結合し、`CREATE_PUBLISH` は対象に含めない。
+複数の `CREATE_DRAFT` / `FIRST_PUBLISH` がある場合は、それぞれ最初の timestamp (`MIN`) を使う。
+期間フィルタは `FIRST_PUBLISH` 側の `dt` に適用し、`published_at < draft_at` になる異常ペアは除外する。
+
+Query parameters:
+
+| Parameter | Default | 説明 |
+| --- | --- | --- |
+| `days` | `30` | 集計対象期間 |
+
+Response example:
+
+```json
+[
+  {
+    "api": "blogs",
+    "avg_days": 3.5,
+    "sample_count": 12
+  }
+]
+```
+
 ### 5.2.4 環境変数
 
 | 変数名 | 必須 | 説明 |
@@ -331,6 +356,7 @@ s3://microcms-content-ops-events/microcms_events/**/*.parquet
 | `new_status` | string | yes | 変更後 status。複数 status は comma-separated string |
 | `old_updated_at` | timestamp | yes | 変更前 content の updatedAt |
 | `new_updated_at` | timestamp | yes | 変更後 content の updatedAt |
+| `draft_created_at` | timestamp | yes | `contents.new.draftValue.createdAt` |
 | `content_created_at` | timestamp | yes | `contents.new.publishValue.createdAt` |
 | `content_published_at` | timestamp | yes | `contents.new.publishValue.publishedAt` |
 | `raw_payload` | string | no | Webhook payload の原文 |
@@ -470,6 +496,55 @@ GROUP BY api
 ORDER BY avg_days DESC, api;
 ```
 
+## 7.5 Average Draft to Publish by API
+
+```sql
+WITH drafts AS (
+  SELECT
+    api,
+    content_id,
+    MIN(draft_created_at) AS draft_at
+  FROM read_parquet(
+    '<EVENTS_PATH>',
+    hive_partitioning = true,
+    union_by_name = true
+  )
+  WHERE
+    event_kind = 'CREATE_DRAFT'
+    AND content_id IS NOT NULL
+    AND draft_created_at IS NOT NULL
+  GROUP BY api, content_id
+),
+first_publishes AS (
+  SELECT
+    api,
+    content_id,
+    MIN(content_published_at) AS published_at
+  FROM read_parquet(
+    '<EVENTS_PATH>',
+    hive_partitioning = true,
+    union_by_name = true
+  )
+  WHERE
+    dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) - INTERVAL 29 DAY
+    AND event_kind = 'FIRST_PUBLISH'
+    AND content_id IS NOT NULL
+    AND content_published_at IS NOT NULL
+  GROUP BY api, content_id
+)
+SELECT
+  drafts.api,
+  AVG(date_diff('second', drafts.draft_at, first_publishes.published_at) / 86400.0) AS avg_days,
+  COUNT(*) AS sample_count
+FROM drafts
+INNER JOIN first_publishes
+  ON drafts.api = first_publishes.api
+  AND drafts.content_id = first_publishes.content_id
+WHERE first_publishes.published_at >= drafts.draft_at
+GROUP BY drafts.api
+ORDER BY avg_days DESC, drafts.api;
+```
+
 ## 8. Grafana 仕様
 
 Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパネルとして可視化する。
@@ -482,6 +557,7 @@ Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパ
 | API Activity | `/metrics/api-activity` | Stacked Bar Chart |
 | Top Updated Contents | `/metrics/top-updated-contents` | Table |
 | Average Time to Publish by API | `/metrics/average-time-to-publish-by-api` | Horizontal Bar Chart |
+| Average Draft to Publish by API | `/metrics/average-draft-to-publish-by-api` | Horizontal Bar Chart |
 
 API Activity は `create_draft_count`、`create_publish_count`、`first_publish_count`、`update_publish_count`、`unpublish_count`、`delete_count` を stacked series として表示する。
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
@@ -489,6 +565,7 @@ Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキ
 ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
 Top Updated Contents は API response の `count` field を Table 上では `updated_count` として表示し、`last_event_at` は field override で `dateTimeAsLocal` 表示とする。
 Average Time to Publish by API は green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。
+Average Draft to Publish by API は Average Time to Publish by API と並置し、duration chart では `avg_days` のみを描画する。API response の `sample_count` は平均算出件数の確認用であり、日数 series として描画しない。
 
 ## 9. セキュリティ仕様
 
