@@ -216,6 +216,13 @@ async fn average_time_to_publish_by_api(
     .map(Json)
 }
 
+const PARTITION_TIME_UTC_SUFFIX: &str = "T00:00:00Z";
+
+#[cfg(test)]
+fn format_partition_time(dt: &str) -> String {
+    format!("{dt}{PARTITION_TIME_UTC_SUFFIX}")
+}
+
 fn query_calendar_heatmap_rows(
     connection: &Connection,
     events_sql: &str,
@@ -248,7 +255,7 @@ fn query_calendar_heatmap_rows(
           GROUP BY dt
         )
         SELECT
-          CONCAT(CAST(calendar.dt AS VARCHAR), 'T00:00:00Z') AS time,
+          CONCAT(CAST(calendar.dt AS VARCHAR), '{PARTITION_TIME_UTC_SUFFIX}') AS time,
           COALESCE(daily.event_count, 0) AS value
         FROM calendar
         LEFT JOIN daily ON daily.dt = calendar.dt
@@ -555,6 +562,14 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
+    fn formats_partition_time_as_utc_midnight() {
+        assert_eq!(
+            format_partition_time("2026-06-29"),
+            "2026-06-29T00:00:00Z"
+        );
+    }
+
+    #[test]
     fn validates_time_range() {
         let from_ms = 1_000_i64;
         let to_ms = 2_000_i64;
@@ -752,10 +767,10 @@ mod tests {
             .unwrap();
 
         assert!(calendar.iter().any(|row| {
-            row.time == format!("{zero_date}T00:00:00Z") && row.value == 0
+            row.time == format_partition_time(&zero_date.to_string()) && row.value == 0
         }));
         assert!(calendar.iter().any(|row| {
-            row.time == format!("{event_date}T00:00:00Z") && row.value == 4
+            row.time == format_partition_time(&event_date.to_string()) && row.value == 4
         }));
 
         assert_eq!(activity.len(), 2);

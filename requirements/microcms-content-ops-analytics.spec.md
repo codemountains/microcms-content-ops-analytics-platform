@@ -200,6 +200,7 @@ Response:
 
 Calendar Heatmap 用の日別イベント件数を返す。
 `tim012432-calendarheatmap-panel` が消費する time-series 形式で、0件の日も含める。
+`time` は S3 パーティション `dt` と同じ **UTC カレンダー日** を表し、`YYYY-MM-DDT00:00:00Z` 形式で返す。
 
 Query parameters:
 
@@ -474,6 +475,8 @@ Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパ
 
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
 ダッシュボードの time range（既定 `now-365d`）を `${__from}` / `${__to}` として API に渡す。
+ダッシュボード timezone は `utc` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の UTC 日付）と一致させる。
+Top Updated Contents の `last_event_at` は field override で `dateTimeAsLocal` 表示とする。
 Average Time to Publish by API は green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。
 
 ## 9. セキュリティ仕様
