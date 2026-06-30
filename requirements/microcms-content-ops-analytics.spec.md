@@ -511,7 +511,6 @@ microcms_events_compacted/
 - HMAC 署名検証を堅牢に実装できる
 - Arrow / Parquet への変換を直接実装できる
 - DuckDB Query API を固定型の API として実装できる
-- 技術記事としての一貫性が高い
 
 ## 12.2 任意 SQL API を提供しない
 
@@ -521,7 +520,6 @@ microcms_events_compacted/
 
 - SQL injection や意図しないファイルアクセスのリスクを避けるため
 - API の責務を Grafana 用 metrics に限定するため
-- ブログサンプルとして読みやすくするため
 
 ## 13. 今後の拡張候補
 
