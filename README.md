@@ -95,6 +95,9 @@ s3://<bucket>/microcms_events/
         <event_id>.parquet
 ```
 
+`dt` は Webhook 受信時刻を JST（日本時間）のカレンダー日に変換した日付です。
+`received_at` 自体は UTC タイムスタンプのまま Parquet に保存します。
+
 初期実装では、分かりやすさを優先して `1 Webhook event = 1 Parquet file` とします。
 ファイル数が増える場合は、日次単位で compaction する設計に拡張できます。
 
@@ -156,6 +159,7 @@ Grafana から実行できるクエリを固定することで、安全性と説
 
 Grafana は DuckDB Query API の JSON レスポンスを可視化します。
 Calendar Heatmap には [`tim012432-calendarheatmap-panel`](https://grafana.com/grafana/plugins/tim012432-calendarheatmap-panel/) を使います。
+Calendar Heatmap の日付バケットは S3 パーティション `dt` と同じ JST カレンダー日です。
 Grafana 自体には分析対象データを保存しません。
 
 ```text
