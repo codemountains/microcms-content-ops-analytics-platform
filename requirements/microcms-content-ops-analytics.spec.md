@@ -292,13 +292,17 @@ Query parameters:
 | `days` | `30` | 集計対象期間 |
 | `unit` | `days` | `days` または `hours` |
 
+レスポンスは Grafana JSON API datasource が各 JSONPath を同じ長さの field として扱えるよう、`avg_days` と `avg_hours` の両方を返す。
+選択していない unit の field は `null` とする。
+
 `unit=days` response example:
 
 ```json
 [
   {
     "api": "blogs",
-    "avg_days": 1.25
+    "avg_days": 1.25,
+    "avg_hours": null
   }
 ]
 ```
@@ -309,6 +313,7 @@ Query parameters:
 [
   {
     "api": "blogs",
+    "avg_days": null,
     "avg_hours": 30.0
   }
 ]

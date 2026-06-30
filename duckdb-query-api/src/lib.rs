@@ -101,9 +101,7 @@ pub struct TopUpdatedContentRow {
 #[derive(Debug, Serialize)]
 pub struct AverageTimeToPublishRow {
     pub api: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub avg_days: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub avg_hours: Option<f64>,
 }
 
@@ -858,6 +856,14 @@ mod tests {
         assert_eq!(day_rows[0].api.as_deref(), Some("blogs"));
         assert_eq!(day_rows[0].avg_days, Some(1.0));
         assert_eq!(day_rows[0].avg_hours, None);
+        assert_eq!(
+            serde_json::to_value(&day_rows[0]).unwrap(),
+            json!({
+                "api": "blogs",
+                "avg_days": 1.0,
+                "avg_hours": null
+            })
+        );
         assert_eq!(day_rows[1].api.as_deref(), Some("authors"));
         assert_eq!(day_rows[1].avg_days, Some(0.5));
         assert_eq!(day_rows[1].avg_hours, None);
@@ -866,6 +872,14 @@ mod tests {
         assert_eq!(hour_rows[0].api.as_deref(), Some("blogs"));
         assert_eq!(hour_rows[0].avg_days, None);
         assert_eq!(hour_rows[0].avg_hours, Some(24.0));
+        assert_eq!(
+            serde_json::to_value(&hour_rows[0]).unwrap(),
+            json!({
+                "api": "blogs",
+                "avg_days": null,
+                "avg_hours": 24.0
+            })
+        );
         assert_eq!(hour_rows[1].api.as_deref(), Some("authors"));
         assert_eq!(hour_rows[1].avg_days, None);
         assert_eq!(hour_rows[1].avg_hours, Some(12.0));
