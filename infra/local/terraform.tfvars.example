@@ -1,0 +1,7 @@
+aws_region                = "ap-northeast-1"
+floci_endpoint            = "http://localhost:4566"
+floci_lambda_endpoint     = "http://floci:4566"
+event_bucket_name         = "microcms-content-ops-events-local"
+event_prefix              = "microcms_events"
+microcms_webhook_secret   = "local-webhook-secret"
+webhook_ingest_image_uri  = "webhook-ingest:local"

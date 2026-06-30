@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: microCMS Content Ops
+    orgId: 1
+    folder: microCMS Content Ops
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

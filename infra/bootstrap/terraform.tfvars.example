@@ -1,0 +1,3 @@
+project_name = "microcms-content-ops-analytics"
+environment  = "dev"
+aws_region   = "ap-northeast-1"

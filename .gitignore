@@ -1,0 +1,101 @@
+### macOS ###
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+### macOS Patch ###
+# iCloud generated files
+*.icloud
+
+### Development Environment ###
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# direnv
+.direnv/
+
+# devbox local state
+.devbox/
+
+# Rust build outputs
+target/
+
+# OpenTofu / Terraform local state
+.terraform/
+*.tfstate
+*.tfstate.*
+errored.tfstate
+.terraform.tfstate.lock.info
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
+!*.tfvars.example
+!*.tfvars.json.example
+*.tfplan
+*.tfplan.json
+tfplan
+tfplan.*
+plan.out
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Docker Compose local overrides
+docker-compose.override.yml
+compose.override.yml
+
+# ngrok personal config (shared template: ngrok.local.yml)
+ngrok.yml
+!ngrok.local.yml
+
+# DuckDB local database files
+*.duckdb
+*.duckdb.wal
+
+# Logs and reports
+*.log
+coverage/
+lcov.info
+cobertura.xml
+tarpaulin-report.html
+
+### Temporary Files ###
+temp/
+tmp/
+.temp/
+.tmp/

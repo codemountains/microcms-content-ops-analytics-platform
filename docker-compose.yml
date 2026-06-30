@@ -1,0 +1,30 @@
+services:
+  duckdb-query-api:
+    build:
+      context: .
+      dockerfile: duckdb-query-api/Dockerfile
+    environment:
+      EVENTS_PATH: ${EVENTS_PATH:?Set EVENTS_PATH in .env}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      DUCKDB_EXTENSION_DIRECTORY: /tmp/duckdb_extensions
+      PORT: 8000
+    ports:
+      - "8000:8000"
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    depends_on:
+      - duckdb-query-api
+    environment:
+      GF_INSTALL_PLUGINS: marcusolsson-json-datasource
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_USERS_DEFAULT_THEME: light
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

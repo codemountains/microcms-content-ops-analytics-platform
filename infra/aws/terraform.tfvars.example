@@ -1,0 +1,9 @@
+project_name                = "microcms-content-ops-analytics"
+environment                 = "dev"
+aws_region                  = "ap-northeast-1"
+event_prefix                = "microcms_events"
+microcms_webhook_secret     = "replace-me"
+lambda_architecture         = "arm64"
+ecs_cpu_architecture        = "ARM64"
+query_api_desired_count     = 1
+force_destroy_bucket        = false

@@ -1,0 +1,262 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "marcusolsson-json-datasource",
+        "uid": "duckdb-query-api"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "cacheDurationSeconds": 300,
+          "fields": [
+            {
+              "jsonPath": "$[*].dt",
+              "name": "dt",
+              "type": "time"
+            },
+            {
+              "jsonPath": "$[*].event_count",
+              "name": "event_count",
+              "type": "number"
+            }
+          ],
+          "method": "GET",
+          "params": [
+            [
+              "days",
+              "30"
+            ]
+          ],
+          "queryParams": "days=30",
+          "refId": "A",
+          "urlPath": "/metrics/daily-events"
+        }
+      ],
+      "title": "Daily Webhook Events",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "marcusolsson-json-datasource",
+        "uid": "duckdb-query-api"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "cacheDurationSeconds": 300,
+          "fields": [
+            {
+              "jsonPath": "$[*].api",
+              "name": "api",
+              "type": "string"
+            },
+            {
+              "jsonPath": "$[*].event_count",
+              "name": "event_count",
+              "type": "number"
+            },
+            {
+              "jsonPath": "$[*].content_count",
+              "name": "content_count",
+              "type": "number"
+            }
+          ],
+          "method": "GET",
+          "queryParams": "days=30",
+          "refId": "A",
+          "urlPath": "/metrics/events-by-api"
+        }
+      ],
+      "title": "Events by API",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "marcusolsson-json-datasource",
+        "uid": "duckdb-query-api"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "cacheDurationSeconds": 300,
+          "fields": [
+            {
+              "jsonPath": "$[*].api",
+              "name": "api",
+              "type": "string"
+            },
+            {
+              "jsonPath": "$[*].content_id",
+              "name": "content_id",
+              "type": "string"
+            },
+            {
+              "jsonPath": "$[*].title",
+              "name": "title",
+              "type": "string"
+            },
+            {
+              "jsonPath": "$[*].edit_count",
+              "name": "edit_count",
+              "type": "number"
+            },
+            {
+              "jsonPath": "$[*].last_event_at",
+              "name": "last_event_at",
+              "type": "time"
+            }
+          ],
+          "method": "GET",
+          "queryParams": "days=30&limit=20",
+          "refId": "A",
+          "urlPath": "/metrics/top-edited-contents"
+        }
+      ],
+      "title": "Top Edited Contents",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "marcusolsson-json-datasource",
+        "uid": "duckdb-query-api"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "cacheDurationSeconds": 300,
+          "fields": [
+            {
+              "jsonPath": "$[*].dt",
+              "name": "dt",
+              "type": "time"
+            },
+            {
+              "jsonPath": "$[*].status",
+              "name": "status",
+              "type": "string"
+            },
+            {
+              "jsonPath": "$[*].event_count",
+              "name": "event_count",
+              "type": "number"
+            }
+          ],
+          "method": "GET",
+          "queryParams": "days=30",
+          "refId": "A",
+          "urlPath": "/metrics/status-events"
+        }
+      ],
+      "title": "Status Events",
+      "type": "barchart"
+    }
+  ],
+  "preload": false,
+  "refresh": "5m",
+  "schemaVersion": 41,
+  "tags": [
+    "microcms",
+    "content-ops"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "microCMS Content Ops Analytics",
+  "uid": "microcms-content-ops",
+  "version": 1
+}
