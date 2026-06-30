@@ -100,13 +100,28 @@
               "type": "string"
             },
             {
-              "jsonPath": "$[*].new_count",
-              "name": "new",
+              "jsonPath": "$[*].create_draft_count",
+              "name": "create_draft",
               "type": "number"
             },
             {
-              "jsonPath": "$[*].edit_count",
-              "name": "edit",
+              "jsonPath": "$[*].create_publish_count",
+              "name": "create_publish",
+              "type": "number"
+            },
+            {
+              "jsonPath": "$[*].first_publish_count",
+              "name": "first_publish",
+              "type": "number"
+            },
+            {
+              "jsonPath": "$[*].update_publish_count",
+              "name": "update_publish",
+              "type": "number"
+            },
+            {
+              "jsonPath": "$[*].unpublish_count",
+              "name": "unpublish",
               "type": "number"
             },
             {
