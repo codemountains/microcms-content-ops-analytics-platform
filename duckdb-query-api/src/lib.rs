@@ -50,6 +50,12 @@ struct DaysQuery {
 }
 
 #[derive(Debug, Deserialize)]
+struct AverageTimeToPublishQuery {
+    days: Option<u32>,
+    unit: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct TimeRangeQuery {
     from: Option<i64>,
     to: Option<i64>,
@@ -95,7 +101,10 @@ pub struct TopUpdatedContentRow {
 #[derive(Debug, Serialize)]
 pub struct AverageTimeToPublishRow {
     pub api: Option<String>,
-    pub avg_days: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avg_days: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avg_hours: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -220,11 +229,12 @@ async fn top_updated_contents(
 
 async fn average_time_to_publish_by_api(
     State(state): State<AppState>,
-    Query(query): Query<DaysQuery>,
+    Query(query): Query<AverageTimeToPublishQuery>,
 ) -> Result<Json<Vec<AverageTimeToPublishRow>>, ApiError> {
     let days = validate_days(query.days)?;
+    let unit = validate_publish_duration_unit(query.unit.as_deref())?;
     query_duckdb(state, move |connection, events_sql| {
-        query_average_time_to_publish_rows(connection, events_sql, days)
+        query_average_time_to_publish_rows(connection, events_sql, days, unit)
     })
     .await
     .map(Json)
@@ -381,13 +391,15 @@ fn query_average_time_to_publish_rows(
     connection: &Connection,
     events_sql: &str,
     days: u32,
+    unit: PublishDurationUnit,
 ) -> duckdb::Result<Vec<AverageTimeToPublishRow>> {
     let days_minus_one = days - 1;
+    let (divisor, value_column) = unit.sql_parts();
     let sql = format!(
         r#"
         SELECT
           api,
-          AVG(date_diff('second', content_created_at, content_published_at) / 86400.0) AS avg_days
+          AVG(date_diff('second', content_created_at, content_published_at) / {divisor}) AS {value_column}
         FROM {events_sql}
         WHERE
           dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY'
@@ -396,15 +408,17 @@ fn query_average_time_to_publish_rows(
           AND content_published_at IS NOT NULL
           AND content_published_at >= content_created_at
         GROUP BY api
-        ORDER BY avg_days DESC, api
+        ORDER BY {value_column} DESC, api
         "#
     );
 
     let mut statement = connection.prepare(&sql)?;
     let rows = statement.query_map([], |row| {
+        let value = row.get(1)?;
         Ok(AverageTimeToPublishRow {
             api: row.get(0)?,
-            avg_days: row.get(1)?,
+            avg_days: unit.days_value(value),
+            avg_hours: unit.hours_value(value),
         })
     })?;
     collect_rows(rows)
@@ -585,6 +599,43 @@ fn validate_days_with_default(days: Option<u32>, default: u32) -> Result<u32, Ap
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PublishDurationUnit {
+    Days,
+    Hours,
+}
+
+impl PublishDurationUnit {
+    fn sql_parts(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Days => ("86400.0", "avg_days"),
+            Self::Hours => ("3600.0", "avg_hours"),
+        }
+    }
+
+    fn days_value(self, value: f64) -> Option<f64> {
+        match self {
+            Self::Days => Some(value),
+            Self::Hours => None,
+        }
+    }
+
+    fn hours_value(self, value: f64) -> Option<f64> {
+        match self {
+            Self::Days => None,
+            Self::Hours => Some(value),
+        }
+    }
+}
+
+fn validate_publish_duration_unit(unit: Option<&str>) -> Result<PublishDurationUnit, ApiError> {
+    match unit.unwrap_or("days") {
+        "days" => Ok(PublishDurationUnit::Days),
+        "hours" => Ok(PublishDurationUnit::Hours),
+        _ => Err(ApiError::InvalidQuery("unit must be days or hours")),
+    }
+}
+
 const MAX_CALENDAR_RANGE_MS: i64 = 3660 * 24 * 60 * 60 * 1000;
 const DEFAULT_CALENDAR_RANGE_MS: i64 = 365 * 24 * 60 * 60 * 1000;
 
@@ -709,6 +760,23 @@ mod tests {
     }
 
     #[test]
+    fn validates_publish_duration_unit() {
+        assert_eq!(
+            validate_publish_duration_unit(None).unwrap(),
+            PublishDurationUnit::Days
+        );
+        assert_eq!(
+            validate_publish_duration_unit(Some("days")).unwrap(),
+            PublishDurationUnit::Days
+        );
+        assert_eq!(
+            validate_publish_duration_unit(Some("hours")).unwrap(),
+            PublishDurationUnit::Hours
+        );
+        assert!(validate_publish_duration_unit(Some("weeks")).is_err());
+    }
+
+    #[test]
     fn validates_limit() {
         assert_eq!(validate_limit(None).unwrap(), 20);
         assert_eq!(validate_limit(Some(1)).unwrap(), 1);
@@ -739,6 +807,68 @@ mod tests {
             normalize_duckdb_s3_endpoint("https://localhost:4566"),
             "localhost:4566"
         );
+    }
+
+    #[test]
+    fn queries_average_time_to_publish_by_api_in_selected_unit() {
+        let connection = Connection::open_in_memory().unwrap();
+        let current_jst_date =
+            "CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE)";
+        let events_sql = r#"
+            (
+              SELECT {current_jst_date} AS dt, 'blogs' AS api, 'CREATE_PUBLISH' AS event_kind,
+                     TIMESTAMP '2026-06-28 00:00:00' AS content_created_at,
+                     TIMESTAMP '2026-06-29 12:00:00' AS content_published_at
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'FIRST_PUBLISH',
+                     TIMESTAMP '2026-06-29 00:00:00',
+                     TIMESTAMP '2026-06-29 12:00:00'
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'FIRST_PUBLISH',
+                     TIMESTAMP '2026-06-30 00:00:00',
+                     TIMESTAMP '2026-06-29 12:00:00'
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'FIRST_PUBLISH',
+                     NULL::TIMESTAMP,
+                     TIMESTAMP '2026-06-29 12:00:00'
+              UNION ALL
+              SELECT {current_jst_date}, 'authors', 'CREATE_PUBLISH',
+                     TIMESTAMP '2026-06-29 00:00:00',
+                     TIMESTAMP '2026-06-29 12:00:00'
+            )
+        "#
+        .replace("{current_jst_date}", current_jst_date);
+
+        let day_rows = query_average_time_to_publish_rows(
+            &connection,
+            &events_sql,
+            30,
+            PublishDurationUnit::Days,
+        )
+        .unwrap();
+        let hour_rows = query_average_time_to_publish_rows(
+            &connection,
+            &events_sql,
+            30,
+            PublishDurationUnit::Hours,
+        )
+        .unwrap();
+
+        assert_eq!(day_rows.len(), 2);
+        assert_eq!(day_rows[0].api.as_deref(), Some("blogs"));
+        assert_eq!(day_rows[0].avg_days, Some(1.0));
+        assert_eq!(day_rows[0].avg_hours, None);
+        assert_eq!(day_rows[1].api.as_deref(), Some("authors"));
+        assert_eq!(day_rows[1].avg_days, Some(0.5));
+        assert_eq!(day_rows[1].avg_hours, None);
+
+        assert_eq!(hour_rows.len(), 2);
+        assert_eq!(hour_rows[0].api.as_deref(), Some("blogs"));
+        assert_eq!(hour_rows[0].avg_days, None);
+        assert_eq!(hour_rows[0].avg_hours, Some(24.0));
+        assert_eq!(hour_rows[1].api.as_deref(), Some("authors"));
+        assert_eq!(hour_rows[1].avg_days, None);
+        assert_eq!(hour_rows[1].avg_hours, Some(12.0));
     }
 
     #[test]
@@ -979,7 +1109,12 @@ mod tests {
                     query_calendar_heatmap_rows(connection, events_sql, from_ms, to_ms)?,
                     query_api_activity_rows(connection, events_sql, 4)?,
                     query_top_updated_contents_rows(connection, events_sql, 4, 20)?,
-                    query_average_time_to_publish_rows(connection, events_sql, 4)?,
+                    query_average_time_to_publish_rows(
+                        connection,
+                        events_sql,
+                        4,
+                        PublishDurationUnit::Days,
+                    )?,
                     query_average_draft_to_publish_rows(connection, events_sql, 4)?,
                 ))
             })
@@ -1018,7 +1153,8 @@ mod tests {
 
         assert_eq!(publish_duration.len(), 1);
         assert_eq!(publish_duration[0].api.as_deref(), Some("blogs"));
-        assert_eq!(publish_duration[0].avg_days, 1.125);
+        assert_eq!(publish_duration[0].avg_days, Some(1.125));
+        assert_eq!(publish_duration[0].avg_hours, None);
 
         assert_eq!(draft_duration.len(), 1);
         assert_eq!(draft_duration[0].api.as_deref(), Some("blogs"));
