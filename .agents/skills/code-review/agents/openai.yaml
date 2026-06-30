@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review microCMS analytics changes"
+  default_prompt: "Use $code-review to review this change for microCMS analytics repository risks."

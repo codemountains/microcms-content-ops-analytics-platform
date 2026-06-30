@@ -1,0 +1,4 @@
+interface:
+  display_name: "TDD Implement"
+  short_description: "Default TDD workflow for code changes"
+  default_prompt: "Use $tdd-implement to implement, fix, or refactor this microCMS analytics code change with a test-first workflow."

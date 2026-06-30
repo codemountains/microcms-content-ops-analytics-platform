@@ -1,0 +1,4 @@
+interface:
+  display_name: "Docs Staleness Review"
+  short_description: "Review docs for repo drift"
+  default_prompt: "Use $docs-staleness-review to review these docs for drift from the microCMS analytics implementation."
