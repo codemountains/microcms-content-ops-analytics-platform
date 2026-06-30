@@ -43,6 +43,8 @@ validate:
     env 'EVENTS_PATH=s3://example-bucket/microcms_events/**/*.parquet' {{compose}} config >/dev/null
     env NGROK_AUTHTOKEN="${NGROK_AUTHTOKEN:-dummy}" {{local_compose}} config >/dev/null
     jq empty grafana/dashboards/microcms-content-ops-analytics.json
+    jq -e '.panels[] | select(.title == "Top Updated Contents") | .targets[].fields[] | select(.jsonPath == "$[*].count" and .name == "updated_count" and .type == "number")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
+    jq -e '.panels[] | select(.title == "Top Updated Contents") | .fieldConfig.overrides[] | select(.matcher.options == "last_event_at") | .properties[] | select(.id == "unit" and .value == "dateTimeAsLocal")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
 
 # Run the full local static verification suite.
 check: fmt test clippy validate
