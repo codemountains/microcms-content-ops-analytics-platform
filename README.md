@@ -269,7 +269,7 @@ docker compose up --build
 | --- | --- |
 | `http://localhost:8000/health` | DuckDB Query API の health check |
 | `http://localhost:8000/metrics/calendar-heatmap` | Calendar Heatmap 用の日別イベント件数 |
-| `http://localhost:8000/metrics/api-activity` | API ごとの `new` / `edit` / `delete` 件数 |
+| `http://localhost:8000/metrics/api-activity` | API ごとの `event_kind` 別件数 |
 | `http://localhost:8000/metrics/top-updated-contents` | 更新回数が多いコンテンツ |
 | `http://localhost:8000/metrics/average-time-to-publish-by-api` | API ごとの平均公開所要日数 |
 | `http://localhost:3000` | Grafana |

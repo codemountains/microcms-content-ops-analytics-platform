@@ -75,8 +75,11 @@ pub struct CalendarHeatmapRow {
 #[derive(Debug, Serialize)]
 pub struct ApiActivityRow {
     pub api: Option<String>,
-    pub new_count: i64,
-    pub edit_count: i64,
+    pub create_draft_count: i64,
+    pub create_publish_count: i64,
+    pub first_publish_count: i64,
+    pub update_publish_count: i64,
+    pub unpublish_count: i64,
     pub delete_count: i64,
     pub total_count: i64,
 }
@@ -284,9 +287,12 @@ fn query_api_activity_rows(
         r#"
         SELECT
           api,
-          SUM(CASE WHEN event_type = 'new' THEN 1 ELSE 0 END) AS new_count,
-          SUM(CASE WHEN event_type = 'edit' THEN 1 ELSE 0 END) AS edit_count,
-          SUM(CASE WHEN event_type = 'delete' THEN 1 ELSE 0 END) AS delete_count,
+          SUM(CASE WHEN event_kind = 'CREATE_DRAFT' THEN 1 ELSE 0 END) AS create_draft_count,
+          SUM(CASE WHEN event_kind = 'CREATE_PUBLISH' THEN 1 ELSE 0 END) AS create_publish_count,
+          SUM(CASE WHEN event_kind = 'FIRST_PUBLISH' THEN 1 ELSE 0 END) AS first_publish_count,
+          SUM(CASE WHEN event_kind = 'UPDATE_PUBLISH' THEN 1 ELSE 0 END) AS update_publish_count,
+          SUM(CASE WHEN event_kind = 'UNPUBLISH' THEN 1 ELSE 0 END) AS unpublish_count,
+          SUM(CASE WHEN event_kind = 'DELETE' THEN 1 ELSE 0 END) AS delete_count,
           COUNT(*) AS total_count
         FROM {events_sql}
         WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY'
@@ -299,10 +305,13 @@ fn query_api_activity_rows(
     let rows = statement.query_map([], |row| {
         Ok(ApiActivityRow {
             api: row.get(0)?,
-            new_count: row.get(1)?,
-            edit_count: row.get(2)?,
-            delete_count: row.get(3)?,
-            total_count: row.get(4)?,
+            create_draft_count: row.get(1)?,
+            create_publish_count: row.get(2)?,
+            first_publish_count: row.get(3)?,
+            update_publish_count: row.get(4)?,
+            unpublish_count: row.get(5)?,
+            delete_count: row.get(6)?,
+            total_count: row.get(7)?,
         })
     })?;
     collect_rows(rows)
@@ -705,6 +714,21 @@ mod tests {
                     '{{}}' AS raw_payload
                   UNION ALL
                   SELECT
+                    TIMESTAMP '{event_date} 11:00:00',
+                    'example-service',
+                    'blogs',
+                    NULL,
+                    'CREATE_DRAFT',
+                    'new',
+                    NULL,
+                    'DRAFT',
+                    NULL,
+                    TIMESTAMP '{event_date} 11:00:00',
+                    NULL,
+                    NULL,
+                    '{{}}'
+                  UNION ALL
+                  SELECT
                     TIMESTAMP '{event_date} 13:00:00',
                     'example-service',
                     'blogs',
@@ -715,6 +739,36 @@ mod tests {
                     'PUBLISH',
                     TIMESTAMP '{event_date} 12:00:00',
                     TIMESTAMP '{event_date} 13:00:00',
+                    NULL,
+                    NULL,
+                    '{{}}'
+                  UNION ALL
+                  SELECT
+                    TIMESTAMP '{event_date} 15:00:00',
+                    'example-service',
+                    'blogs',
+                    NULL,
+                    'UNPUBLISH',
+                    'edit',
+                    'PUBLISH',
+                    'DRAFT',
+                    TIMESTAMP '{event_date} 14:00:00',
+                    TIMESTAMP '{event_date} 15:00:00',
+                    NULL,
+                    NULL,
+                    '{{}}'
+                  UNION ALL
+                  SELECT
+                    TIMESTAMP '{event_date} 16:00:00',
+                    'example-service',
+                    'blogs',
+                    NULL,
+                    NULL,
+                    'edit',
+                    NULL,
+                    NULL,
+                    NULL,
+                    TIMESTAMP '{event_date} 16:00:00',
                     NULL,
                     NULL,
                     '{{}}'
@@ -788,17 +842,26 @@ mod tests {
             row.time == format_partition_time(&zero_date.to_string()) && row.value == 0
         }));
         assert!(calendar.iter().any(|row| {
-            row.time == format_partition_time(&event_date.to_string()) && row.value == 4
+            row.time == format_partition_time(&event_date.to_string()) && row.value == 7
         }));
 
         assert_eq!(activity.len(), 2);
         assert_eq!(activity[0].api.as_deref(), Some("blogs"));
-        assert_eq!(activity[0].new_count, 1);
-        assert_eq!(activity[0].edit_count, 2);
+        assert_eq!(activity[0].create_draft_count, 1);
+        assert_eq!(activity[0].create_publish_count, 1);
+        assert_eq!(activity[0].first_publish_count, 1);
+        assert_eq!(activity[0].update_publish_count, 1);
+        assert_eq!(activity[0].unpublish_count, 1);
         assert_eq!(activity[0].delete_count, 0);
-        assert_eq!(activity[0].total_count, 3);
+        assert_eq!(activity[0].total_count, 6);
         assert_eq!(activity[1].api.as_deref(), Some("authors"));
+        assert_eq!(activity[1].create_draft_count, 0);
+        assert_eq!(activity[1].create_publish_count, 0);
+        assert_eq!(activity[1].first_publish_count, 0);
+        assert_eq!(activity[1].update_publish_count, 0);
+        assert_eq!(activity[1].unpublish_count, 0);
         assert_eq!(activity[1].delete_count, 1);
+        assert_eq!(activity[1].total_count, 1);
 
         assert_eq!(top_contents.len(), 2);
         assert_eq!(top_contents[0].api.as_deref(), Some("blogs"));

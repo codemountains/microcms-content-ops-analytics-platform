@@ -228,7 +228,8 @@ Response example:
 
 #### `GET /metrics/api-activity`
 
-API ごとの `type = new` / `edit` / `delete` 件数を返す。
+API ごとの `event_kind` 別件数を返す。
+`event_kind` が `NULL` または想定外の値の場合、既知 event_kind の series には含めず、`total_count` には含める。
 
 Query parameters:
 
@@ -242,10 +243,13 @@ Response example:
 [
   {
     "api": "blogs",
-    "new_count": 12,
-    "edit_count": 96,
+    "create_draft_count": 2,
+    "create_publish_count": 4,
+    "first_publish_count": 3,
+    "update_publish_count": 20,
+    "unpublish_count": 1,
     "delete_count": 3,
-    "total_count": 111
+    "total_count": 33
   }
 ]
 ```
@@ -406,9 +410,12 @@ ORDER BY calendar.dt;
 ```sql
 SELECT
   api,
-  SUM(CASE WHEN event_type = 'new' THEN 1 ELSE 0 END) AS new_count,
-  SUM(CASE WHEN event_type = 'edit' THEN 1 ELSE 0 END) AS edit_count,
-  SUM(CASE WHEN event_type = 'delete' THEN 1 ELSE 0 END) AS delete_count,
+  SUM(CASE WHEN event_kind = 'CREATE_DRAFT' THEN 1 ELSE 0 END) AS create_draft_count,
+  SUM(CASE WHEN event_kind = 'CREATE_PUBLISH' THEN 1 ELSE 0 END) AS create_publish_count,
+  SUM(CASE WHEN event_kind = 'FIRST_PUBLISH' THEN 1 ELSE 0 END) AS first_publish_count,
+  SUM(CASE WHEN event_kind = 'UPDATE_PUBLISH' THEN 1 ELSE 0 END) AS update_publish_count,
+  SUM(CASE WHEN event_kind = 'UNPUBLISH' THEN 1 ELSE 0 END) AS unpublish_count,
+  SUM(CASE WHEN event_kind = 'DELETE' THEN 1 ELSE 0 END) AS delete_count,
   COUNT(*) AS total_count
 FROM read_parquet(
   '<EVENTS_PATH>',
@@ -476,6 +483,7 @@ Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパ
 | Top Updated Contents | `/metrics/top-updated-contents` | Table |
 | Average Time to Publish by API | `/metrics/average-time-to-publish-by-api` | Horizontal Bar Chart |
 
+API Activity は `create_draft_count`、`create_publish_count`、`first_publish_count`、`update_publish_count`、`unpublish_count`、`delete_count` を stacked series として表示する。
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
 ダッシュボードの time range（既定 `now-365d`）を `${__from}` / `${__to}` として API に渡す。
 ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
