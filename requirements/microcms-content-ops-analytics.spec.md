@@ -139,6 +139,9 @@ S3 に Parquet file を保存する。
 microcms_events/service=<service>/api=<api>/dt=<YYYY-MM-DD>/<event_id>.parquet
 ```
 
+`dt` は Webhook 受信時刻を JST（日本時間、UTC+09:00）のカレンダー日に変換した日付とする。
+Parquet の `received_at` 列は UTC タイムスタンプのまま保持する。
+
 HTTP response:
 
 成功時:
@@ -200,7 +203,7 @@ Response:
 
 Calendar Heatmap 用の日別イベント件数を返す。
 `tim012432-calendarheatmap-panel` が消費する time-series 形式で、0件の日も含める。
-`time` は S3 パーティション `dt` と同じ **UTC カレンダー日** を表し、`YYYY-MM-DDT00:00:00Z` 形式で返す。
+`time` は S3 パーティション `dt` と同じ **JST カレンダー日** を表し、`YYYY-MM-DDT00:00:00+09:00` 形式で返す。
 
 Query parameters:
 
@@ -217,7 +220,7 @@ Response example:
 ```json
 [
   {
-    "time": "2026-06-29T00:00:00Z",
+    "time": "2026-06-29T00:00:00+09:00",
     "value": 12
   }
 ]
@@ -350,7 +353,7 @@ S3 key は次の partition を含む。
 | --- | --- |
 | `service` | microCMS service ID |
 | `api` | microCMS API ID |
-| `dt` | Webhook 受信日 |
+| `dt` | Webhook 受信時刻を JST に変換したカレンダー日 |
 
 例:
 
@@ -365,8 +368,8 @@ microcms_events/service=my-service/api=blogs/dt=2026-06-29/01JXXXXXXXX.parquet
 ```sql
 WITH bounds AS (
   SELECT
-    CAST(epoch_ms(<from_ms>) AS DATE) AS start_date,
-    CAST(epoch_ms(<to_ms>) AS DATE) AS end_date
+    CAST(epoch_ms(<from_ms>) + INTERVAL '9 HOURS' AS DATE) AS start_date,
+    CAST(epoch_ms(<to_ms>) + INTERVAL '9 HOURS' AS DATE) AS end_date
 ),
 calendar AS (
   SELECT CAST(day AS DATE) AS dt
@@ -391,7 +394,7 @@ daily AS (
   GROUP BY dt
 )
 SELECT
-  CONCAT(CAST(calendar.dt AS VARCHAR), 'T00:00:00Z') AS time,
+  CONCAT(CAST(calendar.dt AS VARCHAR), 'T00:00:00+09:00') AS time,
   COALESCE(daily.event_count, 0) AS value
 FROM calendar
 LEFT JOIN daily ON daily.dt = calendar.dt
@@ -412,7 +415,7 @@ FROM read_parquet(
   hive_partitioning = true,
   union_by_name = true
 )
-WHERE dt >= current_date - INTERVAL 30 DAY
+WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) - INTERVAL 30 DAY
 GROUP BY api
 ORDER BY total_count DESC, api;
 ```
@@ -431,7 +434,7 @@ FROM read_parquet(
   union_by_name = true
 )
 WHERE
-  dt >= current_date - INTERVAL 30 DAY
+  dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) - INTERVAL 30 DAY
   AND event_type IN ('new', 'edit')
   AND content_id IS NOT NULL
 GROUP BY api, content_id
@@ -451,7 +454,7 @@ FROM read_parquet(
   union_by_name = true
 )
 WHERE
-  dt >= current_date - INTERVAL 30 DAY
+  dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) - INTERVAL 30 DAY
   AND event_kind IN ('CREATE_PUBLISH', 'FIRST_PUBLISH')
   AND content_created_at IS NOT NULL
   AND content_published_at IS NOT NULL
@@ -475,7 +478,7 @@ Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパ
 
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
 ダッシュボードの time range（既定 `now-365d`）を `${__from}` / `${__to}` として API に渡す。
-ダッシュボード timezone は `utc` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の UTC 日付）と一致させる。
+ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
 Top Updated Contents は API response の `count` field を Table 上では `updated_count` として表示し、`last_event_at` は field override で `dateTimeAsLocal` 表示とする。
 Average Time to Publish by API は green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。
 

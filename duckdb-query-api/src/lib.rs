@@ -216,11 +216,12 @@ async fn average_time_to_publish_by_api(
     .map(Json)
 }
 
-const PARTITION_TIME_UTC_SUFFIX: &str = "T00:00:00Z";
+const JST_OFFSET_INTERVAL: &str = "9 HOURS";
+const PARTITION_TIME_JST_SUFFIX: &str = "T00:00:00+09:00";
 
 #[cfg(test)]
 fn format_partition_time(dt: &str) -> String {
-    format!("{dt}{PARTITION_TIME_UTC_SUFFIX}")
+    format!("{dt}{PARTITION_TIME_JST_SUFFIX}")
 }
 
 fn query_calendar_heatmap_rows(
@@ -233,8 +234,8 @@ fn query_calendar_heatmap_rows(
         r#"
         WITH bounds AS (
           SELECT
-            CAST(epoch_ms({from_ms}) AS DATE) AS start_date,
-            CAST(epoch_ms({to_ms}) AS DATE) AS end_date
+            CAST(epoch_ms({from_ms}) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) AS start_date,
+            CAST(epoch_ms({to_ms}) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) AS end_date
         ),
         calendar AS (
           SELECT CAST(day AS DATE) AS dt
@@ -255,7 +256,7 @@ fn query_calendar_heatmap_rows(
           GROUP BY dt
         )
         SELECT
-          CONCAT(CAST(calendar.dt AS VARCHAR), '{PARTITION_TIME_UTC_SUFFIX}') AS time,
+          CONCAT(CAST(calendar.dt AS VARCHAR), '{PARTITION_TIME_JST_SUFFIX}') AS time,
           COALESCE(daily.event_count, 0) AS value
         FROM calendar
         LEFT JOIN daily ON daily.dt = calendar.dt
@@ -288,7 +289,7 @@ fn query_api_activity_rows(
           SUM(CASE WHEN event_type = 'delete' THEN 1 ELSE 0 END) AS delete_count,
           COUNT(*) AS total_count
         FROM {events_sql}
-        WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE) - INTERVAL '{days_minus_one} DAY'
+        WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY'
         GROUP BY api
         ORDER BY total_count DESC, api
         "#
@@ -323,7 +324,7 @@ fn query_top_updated_contents_rows(
           CAST(MAX(received_at) AS VARCHAR) AS last_event_at
         FROM {events_sql}
         WHERE
-          dt >= CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE) - INTERVAL '{days_minus_one} DAY'
+          dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY'
           AND event_type IN ('new', 'edit')
           AND content_id IS NOT NULL
         GROUP BY api, content_id
@@ -357,7 +358,7 @@ fn query_average_time_to_publish_rows(
           AVG(date_diff('second', content_created_at, content_published_at) / 86400.0) AS avg_days
         FROM {events_sql}
         WHERE
-          dt >= CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE) - INTERVAL '{days_minus_one} DAY'
+          dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY'
           AND event_kind IN ('CREATE_PUBLISH', 'FIRST_PUBLISH')
           AND content_created_at IS NOT NULL
           AND content_published_at IS NOT NULL
@@ -516,9 +517,7 @@ fn validate_time_range(from: Option<i64>, to: Option<i64>) -> Result<(i64, i64),
             let to_ms = chrono::Utc::now().timestamp_millis();
             Ok((to_ms - DEFAULT_CALENDAR_RANGE_MS, to_ms))
         }
-        _ => Err(ApiError::InvalidQuery(
-            "from and to must both be provided",
-        )),
+        _ => Err(ApiError::InvalidQuery("from and to must both be provided")),
     }
 }
 
@@ -558,15 +557,38 @@ impl IntoResponse for ApiError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{Duration, NaiveDate, TimeZone, Utc};
+    use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
     use tempfile::tempdir;
 
     #[test]
-    fn formats_partition_time_as_utc_midnight() {
+    fn formats_partition_time_as_jst_midnight() {
         assert_eq!(
             format_partition_time("2026-06-29"),
-            "2026-06-29T00:00:00Z"
+            "2026-06-29T00:00:00+09:00"
         );
+    }
+
+    #[test]
+    fn queries_calendar_heatmap_with_jst_day_bounds() {
+        let connection = Connection::open_in_memory().unwrap();
+        let from_ms = DateTime::parse_from_rfc3339("2026-06-30T00:00:00+09:00")
+            .unwrap()
+            .timestamp_millis();
+        let to_ms = DateTime::parse_from_rfc3339("2026-06-30T23:59:59+09:00")
+            .unwrap()
+            .timestamp_millis();
+
+        let rows = query_calendar_heatmap_rows(
+            &connection,
+            "(SELECT DATE '2026-06-30' AS dt UNION ALL SELECT DATE '2026-06-30' AS dt)",
+            from_ms,
+            to_ms,
+        )
+        .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].time, "2026-06-30T00:00:00+09:00");
+        assert_eq!(rows[0].value, 2);
     }
 
     #[test]
@@ -635,7 +657,7 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         let today: String = connection
             .query_row(
-                "SELECT CAST(CAST(current_timestamp AS TIMESTAMP) AS DATE)::VARCHAR",
+                "SELECT CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE)::VARCHAR",
                 [],
                 |row| row.get(0),
             )
@@ -744,11 +766,7 @@ mod tests {
         };
 
         let from_ms = Utc
-            .from_utc_datetime(
-                &(today - Duration::days(3))
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap(),
-            )
+            .from_utc_datetime(&(today - Duration::days(3)).and_hms_opt(0, 0, 0).unwrap())
             .timestamp_millis();
         let to_ms = Utc
             .from_utc_datetime(&today.and_hms_opt(23, 59, 59).unwrap())

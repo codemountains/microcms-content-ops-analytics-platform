@@ -276,7 +276,7 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "utc",
+  "timezone": "Asia/Tokyo",
   "title": "microCMS Content Ops Analytics",
   "uid": "microcms-content-ops",
   "version": 3
