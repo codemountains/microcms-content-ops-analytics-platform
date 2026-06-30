@@ -46,6 +46,7 @@ validate:
     jq -e '[.panels[] | select(.title == "API Activity") | .targets[].fields[] | {jsonPath, name, type}] as $fields | all([{"jsonPath":"$[*].create_draft_count","name":"create_draft","type":"number"},{"jsonPath":"$[*].create_publish_count","name":"create_publish","type":"number"},{"jsonPath":"$[*].first_publish_count","name":"first_publish","type":"number"},{"jsonPath":"$[*].update_publish_count","name":"update_publish","type":"number"},{"jsonPath":"$[*].unpublish_count","name":"unpublish","type":"number"},{"jsonPath":"$[*].delete_count","name":"delete","type":"number"}]; $fields | index(.))' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
     jq -e '.panels[] | select(.title == "Top Updated Contents") | .targets[].fields[] | select(.jsonPath == "$[*].count" and .name == "updated_count" and .type == "number")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
     jq -e '.panels[] | select(.title == "Top Updated Contents") | .fieldConfig.overrides[] | select(.matcher.options == "last_event_at") | .properties[] | select(.id == "unit" and .value == "dateTimeAsLocal")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
+    jq -e '.panels[] | select(.title == "Average Draft to Publish by API") | .targets[] | select(.urlPath == "/metrics/average-draft-to-publish-by-api") | .fields[] | select(.jsonPath == "$[*].sample_count" and .name == "sample_count" and .type == "number")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
 
 # Run the full local static verification suite.
 check: fmt test clippy validate
@@ -125,6 +126,7 @@ debug-metrics:
     curl "http://localhost:8000/metrics/api-activity?days=3660"
     curl "http://localhost:8000/metrics/top-updated-contents?days=3660&limit=20"
     curl "http://localhost:8000/metrics/average-time-to-publish-by-api?days=3660"
+    curl "http://localhost:8000/metrics/average-draft-to-publish-by-api?days=3660"
 
 # List local Floci S3 event objects.
 debug-s3-ls:

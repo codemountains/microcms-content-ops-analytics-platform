@@ -98,6 +98,13 @@ pub struct AverageTimeToPublishRow {
     pub avg_days: f64,
 }
 
+#[derive(Debug, Serialize)]
+pub struct AverageDraftToPublishRow {
+    pub api: Option<String>,
+    pub avg_days: f64,
+    pub sample_count: i64,
+}
+
 impl AppConfig {
     pub fn from_env() -> Result<Self, ApiError> {
         let events_path = required_env("EVENTS_PATH")?;
@@ -163,6 +170,10 @@ pub fn app(config: AppConfig) -> Router {
             "/metrics/average-time-to-publish-by-api",
             get(average_time_to_publish_by_api),
         )
+        .route(
+            "/metrics/average-draft-to-publish-by-api",
+            get(average_draft_to_publish_by_api),
+        )
         .with_state(state)
 }
 
@@ -214,6 +225,18 @@ async fn average_time_to_publish_by_api(
     let days = validate_days(query.days)?;
     query_duckdb(state, move |connection, events_sql| {
         query_average_time_to_publish_rows(connection, events_sql, days)
+    })
+    .await
+    .map(Json)
+}
+
+async fn average_draft_to_publish_by_api(
+    State(state): State<AppState>,
+    Query(query): Query<DaysQuery>,
+) -> Result<Json<Vec<AverageDraftToPublishRow>>, ApiError> {
+    let days = validate_days(query.days)?;
+    query_duckdb(state, move |connection, events_sql| {
+        query_average_draft_to_publish_rows(connection, events_sql, days)
     })
     .await
     .map(Json)
@@ -382,6 +405,64 @@ fn query_average_time_to_publish_rows(
         Ok(AverageTimeToPublishRow {
             api: row.get(0)?,
             avg_days: row.get(1)?,
+        })
+    })?;
+    collect_rows(rows)
+}
+
+fn query_average_draft_to_publish_rows(
+    connection: &Connection,
+    events_sql: &str,
+    days: u32,
+) -> duckdb::Result<Vec<AverageDraftToPublishRow>> {
+    let days_minus_one = days - 1;
+    let sql = format!(
+        r#"
+        WITH drafts AS (
+          SELECT
+            api,
+            content_id,
+            MIN(draft_created_at) AS draft_at
+          FROM {events_sql}
+          WHERE
+            event_kind = 'CREATE_DRAFT'
+            AND content_id IS NOT NULL
+            AND draft_created_at IS NOT NULL
+          GROUP BY api, content_id
+        ),
+        first_publishes AS (
+          SELECT
+            api,
+            content_id,
+            MIN(content_published_at) AS published_at
+          FROM {events_sql}
+          WHERE
+            dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY'
+            AND event_kind = 'FIRST_PUBLISH'
+            AND content_id IS NOT NULL
+            AND content_published_at IS NOT NULL
+          GROUP BY api, content_id
+        )
+        SELECT
+          drafts.api,
+          AVG(date_diff('second', drafts.draft_at, first_publishes.published_at) / 86400.0) AS avg_days,
+          COUNT(*) AS sample_count
+        FROM drafts
+        INNER JOIN first_publishes
+          ON drafts.api = first_publishes.api
+          AND drafts.content_id = first_publishes.content_id
+        WHERE first_publishes.published_at >= drafts.draft_at
+        GROUP BY drafts.api
+        ORDER BY avg_days DESC, drafts.api
+        "#
+    );
+
+    let mut statement = connection.prepare(&sql)?;
+    let rows = statement.query_map([], |row| {
+        Ok(AverageDraftToPublishRow {
+            api: row.get(0)?,
+            avg_days: row.get(1)?,
+            sample_count: row.get(2)?,
         })
     })?;
     collect_rows(rows)
@@ -660,6 +741,64 @@ mod tests {
         );
     }
 
+    #[test]
+    fn queries_average_draft_to_publish_by_api_from_first_publish_period() {
+        let connection = Connection::open_in_memory().unwrap();
+        let current_jst_date =
+            "CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE)";
+        let events_sql = r#"
+            (
+              SELECT {current_jst_date} AS dt, 'blogs' AS api, 'content-1' AS content_id,
+                     'CREATE_DRAFT' AS event_kind, TIMESTAMP '2026-06-24 00:00:00' AS draft_created_at,
+                     NULL::TIMESTAMP AS content_published_at
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'content-1',
+                     'FIRST_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'content-2',
+                     'CREATE_DRAFT', TIMESTAMP '2026-06-27 00:00:00', NULL::TIMESTAMP
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'content-2',
+                     'FIRST_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'draft-only',
+                     'CREATE_DRAFT', TIMESTAMP '2026-06-26 00:00:00', NULL::TIMESTAMP
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'instant-publish',
+                     'CREATE_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+              UNION ALL
+              SELECT {current_jst_date} - INTERVAL '40 DAY',
+                     'blogs', 'outside-period', 'FIRST_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'outside-period',
+                     'CREATE_DRAFT', TIMESTAMP '2026-06-27 00:00:00', NULL::TIMESTAMP
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'negative-lead',
+                     'CREATE_DRAFT', TIMESTAMP '2026-06-30 00:00:00', NULL::TIMESTAMP
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'negative-lead',
+                     'FIRST_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+              UNION ALL
+              SELECT {current_jst_date}, 'authors', 'author-1',
+                     'CREATE_DRAFT', TIMESTAMP '2026-06-28 00:00:00', NULL::TIMESTAMP
+              UNION ALL
+              SELECT {current_jst_date}, 'authors', 'author-1',
+                     'FIRST_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+            )
+        "#
+        .replace("{current_jst_date}", current_jst_date);
+
+        let rows = query_average_draft_to_publish_rows(&connection, &events_sql, 30).unwrap();
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].api.as_deref(), Some("blogs"));
+        assert_eq!(rows[0].avg_days, 3.5);
+        assert_eq!(rows[0].sample_count, 2);
+        assert_eq!(rows[1].api.as_deref(), Some("authors"));
+        assert_eq!(rows[1].avg_days, 1.0);
+        assert_eq!(rows[1].sample_count, 1);
+    }
+
     #[tokio::test]
     async fn queries_refreshed_metrics_from_local_hive_partitioned_parquet() {
         let tempdir = tempdir().unwrap();
@@ -676,6 +815,7 @@ mod tests {
         let zero_date = event_date - Duration::days(1);
         let created_date = event_date - Duration::days(2);
         let updated_before_date = event_date - Duration::days(1);
+        let draft_created_date = event_date - Duration::days(5);
         let partition_dir = tempdir.path().join(format!(
             "microcms_events/service=example-service/api=blogs/dt={event_date}"
         ));
@@ -709,6 +849,7 @@ mod tests {
                     'PUBLISH' AS new_status,
                     TIMESTAMP '{updated_before_date} 12:00:00' AS old_updated_at,
                     TIMESTAMP '{event_date} 12:00:00' AS new_updated_at,
+                    NULL::TIMESTAMP AS draft_created_at,
                     TIMESTAMP '{created_date} 12:00:00' AS content_created_at,
                     TIMESTAMP '{event_date} 12:00:00' AS content_published_at,
                     '{{}}' AS raw_payload
@@ -717,13 +858,14 @@ mod tests {
                     TIMESTAMP '{event_date} 11:00:00',
                     'example-service',
                     'blogs',
-                    NULL,
+                    'content-1',
                     'CREATE_DRAFT',
                     'new',
                     NULL,
                     'DRAFT',
                     NULL,
                     TIMESTAMP '{event_date} 11:00:00',
+                    TIMESTAMP '{draft_created_date} 12:00:00',
                     NULL,
                     NULL,
                     '{{}}'
@@ -741,6 +883,7 @@ mod tests {
                     TIMESTAMP '{event_date} 13:00:00',
                     NULL,
                     NULL,
+                    NULL,
                     '{{}}'
                   UNION ALL
                   SELECT
@@ -756,6 +899,7 @@ mod tests {
                     TIMESTAMP '{event_date} 15:00:00',
                     NULL,
                     NULL,
+                    NULL,
                     '{{}}'
                   UNION ALL
                   SELECT
@@ -771,6 +915,7 @@ mod tests {
                     TIMESTAMP '{event_date} 16:00:00',
                     NULL,
                     NULL,
+                    NULL,
                     '{{}}'
                   UNION ALL
                   SELECT
@@ -784,6 +929,7 @@ mod tests {
                     'PUBLISH',
                     NULL,
                     TIMESTAMP '{event_date} 14:00:00',
+                    NULL,
                     TIMESTAMP '{event_date} 08:00:00',
                     TIMESTAMP '{event_date} 14:00:00',
                     '{{}}'
@@ -801,6 +947,7 @@ mod tests {
                     NULL AS new_status,
                     TIMESTAMP '{event_date} 15:00:00' AS old_updated_at,
                     NULL AS new_updated_at,
+                    NULL AS draft_created_at,
                     NULL AS content_created_at,
                     NULL AS content_published_at,
                     '{{}}' AS raw_payload
@@ -826,13 +973,14 @@ mod tests {
             .from_utc_datetime(&today.and_hms_opt(23, 59, 59).unwrap())
             .timestamp_millis();
 
-        let (calendar, activity, top_contents, publish_duration) =
+        let (calendar, activity, top_contents, publish_duration, draft_duration) =
             query_duckdb(state, move |connection, events_sql| {
                 Ok((
                     query_calendar_heatmap_rows(connection, events_sql, from_ms, to_ms)?,
                     query_api_activity_rows(connection, events_sql, 4)?,
                     query_top_updated_contents_rows(connection, events_sql, 4, 20)?,
                     query_average_time_to_publish_rows(connection, events_sql, 4)?,
+                    query_average_draft_to_publish_rows(connection, events_sql, 4)?,
                 ))
             })
             .await
@@ -866,10 +1014,15 @@ mod tests {
         assert_eq!(top_contents.len(), 2);
         assert_eq!(top_contents[0].api.as_deref(), Some("blogs"));
         assert_eq!(top_contents[0].content_id.as_deref(), Some("content-1"));
-        assert_eq!(top_contents[0].count, 2);
+        assert_eq!(top_contents[0].count, 3);
 
         assert_eq!(publish_duration.len(), 1);
         assert_eq!(publish_duration[0].api.as_deref(), Some("blogs"));
         assert_eq!(publish_duration[0].avg_days, 1.125);
+
+        assert_eq!(draft_duration.len(), 1);
+        assert_eq!(draft_duration[0].api.as_deref(), Some("blogs"));
+        assert_eq!(draft_duration[0].avg_days, 5.0);
+        assert_eq!(draft_duration[0].sample_count, 1);
     }
 }

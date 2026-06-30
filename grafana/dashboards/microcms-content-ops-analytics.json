@@ -234,7 +234,7 @@
       },
       "gridPos": {
         "h": 9,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 18
       },
@@ -274,6 +274,82 @@
       ],
       "title": "Average Time to Publish by API",
       "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "marcusolsson-json-datasource",
+        "uid": "duckdb-query-api"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "d"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "fields": [
+            {
+              "jsonPath": "$[*].api",
+              "name": "api",
+              "type": "string"
+            },
+            {
+              "jsonPath": "$[*].avg_days",
+              "name": "avg_days",
+              "type": "number"
+            },
+            {
+              "jsonPath": "$[*].sample_count",
+              "name": "sample_count",
+              "type": "number"
+            }
+          ],
+          "method": "GET",
+          "queryParams": "days=30",
+          "refId": "A",
+          "urlPath": "/metrics/average-draft-to-publish-by-api"
+        }
+      ],
+      "title": "Average Draft to Publish by API",
+      "type": "barchart"
     }
   ],
   "preload": false,
@@ -294,5 +370,5 @@
   "timezone": "Asia/Tokyo",
   "title": "microCMS Content Ops Analytics",
   "uid": "microcms-content-ops",
-  "version": 3
+  "version": 4
 }

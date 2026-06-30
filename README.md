@@ -82,6 +82,7 @@ microcms-content-ops-analytics/
 | イベント種別別件数 | 作成・編集・削除の比率を見る |
 | 編集回数が多いコンテンツ | 運用負荷が高い記事を見つける |
 | ステータス別イベント数 | 下書き・公開・非公開などの状態変化を見る |
+| 下書き作成から初回公開までの平均所要日数 | 下書き運用のリードタイムを見る |
 
 ## S3 保存形式
 
@@ -115,6 +116,7 @@ s3://<bucket>/microcms_events/
 | `new_status` | string | 変更後ステータス |
 | `old_updated_at` | timestamp | 変更前コンテンツの更新日時 |
 | `new_updated_at` | timestamp | 変更後コンテンツの更新日時 |
+| `draft_created_at` | timestamp | `contents.new.draftValue.createdAt` |
 | `content_created_at` | timestamp | `contents.new.publishValue.createdAt` |
 | `content_published_at` | timestamp | `contents.new.publishValue.publishedAt` |
 | `raw_payload` | string | Webhook payload の原文 |
@@ -150,6 +152,7 @@ GET /metrics/calendar-heatmap
 GET /metrics/api-activity
 GET /metrics/top-updated-contents
 GET /metrics/average-time-to-publish-by-api
+GET /metrics/average-draft-to-publish-by-api
 ```
 
 任意 SQL を受け付ける API は初期実装では提供しません。
@@ -272,6 +275,7 @@ docker compose up --build
 | `http://localhost:8000/metrics/api-activity` | API ごとの `event_kind` 別件数 |
 | `http://localhost:8000/metrics/top-updated-contents` | 更新回数が多いコンテンツ |
 | `http://localhost:8000/metrics/average-time-to-publish-by-api` | API ごとの平均公開所要日数 |
+| `http://localhost:8000/metrics/average-draft-to-publish-by-api` | API ごとの下書き作成から初回公開までの平均所要日数 |
 | `http://localhost:3000` | Grafana |
 
 ## OpenTofu / ローカルデバッグ

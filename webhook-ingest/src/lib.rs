@@ -54,6 +54,7 @@ pub struct NormalizedEvent {
     pub new_status: Option<String>,
     pub old_updated_at: Option<DateTime<Utc>>,
     pub new_updated_at: Option<DateTime<Utc>>,
+    pub draft_created_at: Option<DateTime<Utc>>,
     pub content_created_at: Option<DateTime<Utc>>,
     pub content_published_at: Option<DateTime<Utc>>,
     pub raw_payload: String,
@@ -256,6 +257,7 @@ pub fn normalize_payload(
         new_status: status_csv(&new_statuses),
         old_updated_at: extract_timestamp(old, &["updatedAt", "updated_at"]),
         new_updated_at: extract_timestamp(new, &["updatedAt", "updated_at"]),
+        draft_created_at: extract_nested_timestamp(new, &["draftValue", "createdAt"]),
         content_created_at: extract_nested_timestamp(new, &["publishValue", "createdAt"]),
         content_published_at: extract_nested_timestamp(new, &["publishValue", "publishedAt"]),
         raw_payload,
@@ -369,6 +371,11 @@ pub fn event_to_parquet(event: &NormalizedEvent) -> Result<Vec<u8>, IngestError>
             true,
         ),
         Field::new(
+            "draft_created_at",
+            DataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into())),
+            true,
+        ),
+        Field::new(
             "content_created_at",
             DataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into())),
             true,
@@ -394,6 +401,7 @@ pub fn event_to_parquet(event: &NormalizedEvent) -> Result<Vec<u8>, IngestError>
             string_optional(event.new_status.as_deref()),
             timestamp_optional(event.old_updated_at),
             timestamp_optional(event.new_updated_at),
+            timestamp_optional(event.draft_created_at),
             timestamp_optional(event.content_created_at),
             timestamp_optional(event.content_published_at),
             string_required(&event.raw_payload),
@@ -617,6 +625,38 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_draft_created_at_from_new_draft_value() {
+        let received_at = DateTime::parse_from_rfc3339("2026-06-29T01:02:03Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let body = br#"{
+          "service": "example-service",
+          "api": "blogs",
+          "id": "content-id",
+          "type": "new",
+          "contents": {
+            "old": null,
+            "new": {
+              "status": ["DRAFT"],
+              "updatedAt": "2026-06-29T12:00:00Z",
+              "publishValue": null,
+              "draftValue": {
+                "createdAt": "2026-06-27T12:00:00Z",
+                "updatedAt": "2026-06-29T12:00:00Z"
+              }
+            }
+          }
+        }"#;
+        let event = normalize_payload(body, received_at).unwrap();
+
+        assert_eq!(event.event_kind.as_deref(), Some("CREATE_DRAFT"));
+        assert_eq!(
+            event.draft_created_at.unwrap().to_rfc3339(),
+            "2026-06-27T12:00:00+00:00"
+        );
+    }
+
+    #[test]
     fn derives_event_kind_for_supported_content_transitions() {
         let received_at = DateTime::parse_from_rfc3339("2026-06-29T01:02:03Z")
             .unwrap()
@@ -742,6 +782,13 @@ mod tests {
             .downcast_ref::<StringArray>()
             .unwrap();
         assert_eq!(event_kind.value(0), "FIRST_PUBLISH");
+        assert!(
+            batch
+                .schema()
+                .fields()
+                .iter()
+                .any(|field| field.name() == "draft_created_at")
+        );
         assert_eq!(batch.num_rows(), 1);
     }
 }
