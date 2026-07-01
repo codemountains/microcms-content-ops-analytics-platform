@@ -22,6 +22,7 @@
 - user が作成した可能性のある変更は revert しない。必要なら、その変更を前提に作業する。
 - 変更範囲を task に必要な範囲へ絞り、無関係な refactor、format churn、metadata 変更を混ぜない。
 - `deploy`、`destroy`、ECR push、S3 bucket deletion、OpenTofu state 変更など外部環境や state に影響する操作は、user の明示指示なしに実行しない。
+- コード修正完了後は、親 agent が `code-reviewer` subagent に review を依頼して第三者視点の feedback を得る。feedback は対応要否を判断し、必要な修正または未対応理由を final response または PR description に明記する。
 - 変更後は `.agents/skills/references/microcms-content-ops-analytics-guardrails.md` の verification guidance に従い、実行できなかった検証と残リスクを final response または PR description に明記する。
 
 ## Repo Skills
