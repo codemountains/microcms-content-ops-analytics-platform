@@ -51,6 +51,25 @@ validate:
     jq -e '.panels[] | select(.title == "Average Time to Publish by API") | .fieldConfig.overrides as $overrides | any($overrides[]; .matcher.options == "avg_days" and any(.properties[]; .id == "unit" and .value == "d") and any(.properties[]; .id == "thresholds" and (.value.steps | any(.value == 1)) and (.value.steps | any(.value == 3)))) and any($overrides[]; .matcher.options == "avg_hours" and any(.properties[]; .id == "unit" and .value == "h") and any(.properties[]; .id == "thresholds" and (.value.steps | any(.value == 24)) and (.value.steps | any(.value == 72))))' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
     jq -e '.panels[] | select(.title == "Average Draft to Publish by API") | .targets[] | select(.urlPath == "/metrics/average-draft-to-publish-by-api") | .fields as $fields | any($fields[]; .jsonPath == "$[*].avg_days" and .name == "avg_days" and .type == "number") and all($fields[]; .jsonPath != "$[*].sample_count")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
 
+# Validate CI workflow structure in addition to static infra checks.
+validate-ci: validate
+    ruby scripts/validate-ci-workflow.rb
+
+# Run the local equivalent of the GitHub Actions static verification suite.
+check-ci:
+    cargo fmt --all --check
+    cargo test -p webhook-ingest
+    cargo test -p duckdb-query-api
+    cargo clippy --workspace --all-targets -- -D warnings
+    tofu fmt -check -recursive infra
+    just validate-ci
+    just docker-build-ci
+
+# Build both production Dockerfiles with debug artifacts for CI smoke testing.
+docker-build-ci:
+    DOCKER_BUILDKIT=1 docker build --build-arg CARGO_PROFILE=debug --build-arg CARGO_BUILD_JOBS=1 -f webhook-ingest/Dockerfile -t webhook-ingest:ci .
+    DOCKER_BUILDKIT=1 docker build --build-arg CARGO_PROFILE=debug --build-arg CARGO_BUILD_JOBS=1 -f duckdb-query-api/Dockerfile -t duckdb-query-api:ci .
+
 # Run the full local static verification suite.
 check: fmt test clippy validate
 

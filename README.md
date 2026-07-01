@@ -240,6 +240,18 @@ just test
 just check
 ```
 
+CI では GitHub Actions が Pull Request と `main` への push 時に検証を実行します。
+ローカルで CI 相当の静的検証を確認する場合は次を実行します。
+
+```bash
+just check-ci
+```
+
+CI は Gitleaks secret scan、Rust fmt/test/clippy、OpenTofu/Docker Compose/Grafana の validate、OpenTofu fmt check、Docker build smoke を実行します。
+Gitleaks は Marketplace action の最新確認済み version を使い、`just check-ci` は Gitleaks 以外の主要検証をローカルで再現します。
+organization repository で Gitleaks action を使う場合は、repository または organization secret として `GITLEAKS_LICENSE` が必要です。
+GitHub Actions の `uses:` は supply-chain risk を抑えるため、tag ではなく commit SHA に pin しています。
+
 主な `just` コマンド:
 
 | コマンド | 内容 |
@@ -247,6 +259,9 @@ just check
 | `just test` | Rust workspace のテストを実行 |
 | `just clippy` | Clippy を warning error として実行 |
 | `just validate` | OpenTofu、Docker Compose、Grafana JSON を検証 |
+| `just validate-ci` | `just validate` に加えて CI workflow contract を検証 |
+| `just check-ci` | CI 相当の静的検証をローカルで実行 |
+| `just docker-build-ci` | CI smoke 用に両 Dockerfile を debug profile で build |
 | `just check` | format、test、clippy、validate を一括実行 |
 | `just debug` | Floci/ngrok/Grafana を使うローカルデバッグ環境を起動 |
 | `just debug-webhook` | ローカル API Gateway に署名付き sample webhook を送信 |
