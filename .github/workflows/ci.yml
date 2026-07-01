@@ -39,7 +39,7 @@ jobs:
           gitleaks_bin="/tmp/gitleaks-${GITLEAKS_VERSION}/gitleaks"
           test -x "$gitleaks_bin"
           tmpdir="$(mktemp -d)"
-          printf 'AWS_SECRET_ACCESS_KEY=%s\n' 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' > "$tmpdir/.env"
+          printf 'GITHUB_TOKEN=%s%s\n' 'ghp_' '0123456789abcdefghijABCDEFGHIJ123456' > "$tmpdir/.env"
           set +e
           "$gitleaks_bin" dir "$tmpdir" --redact --no-banner --exit-code 2
           status="$?"
