@@ -261,7 +261,6 @@ GitHub Actions の `uses:` は supply-chain risk を抑えるため、tag では
 | `just test` | Rust workspace のテストを実行 |
 | `just clippy` | Clippy を warning error として実行 |
 | `just validate` | OpenTofu、Docker Compose、Grafana JSON を検証 |
-| `just validate-ci` | `just validate` に加えて CI workflow contract を検証 |
 | `just check-ci` | CI 相当の静的検証をローカルで実行 |
 | `just docker-build-ci` | CI smoke 用に両 Dockerfile を debug profile で build |
 | `just check` | format、test、clippy、validate を一括実行 |
