@@ -16,8 +16,45 @@ env:
   OPENTOFU_VERSION: "1.12.3"
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      infra_any: ${{ steps.filter.outputs.infra_any }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Detect infra changes
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"
+          elif [ -n "$PUSH_BEFORE" ] && ! printf '%s' "$PUSH_BEFORE" | grep -Eq '^0+$'; then
+            base="$PUSH_BEFORE"
+          else
+            base="$(git rev-list --max-parents=0 "$GITHUB_SHA")"
+          fi
+
+          git cat-file -e "$base^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$base"
+          git diff --name-only "$base" "$GITHUB_SHA" > changed-files.txt
+
+          infra_any=false
+          if grep -Eq '^(infra/|grafana/|docker-compose(\.local)?\.yml$|justfile$|\.github/workflows/infra\.yml$)' changed-files.txt; then
+            infra_any=true
+          fi
+
+          echo "infra_any=$infra_any" >> "$GITHUB_OUTPUT"
+
   validate:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infra_any == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -36,6 +73,8 @@ jobs:
 
   fmt:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infra_any == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
