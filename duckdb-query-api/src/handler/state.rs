@@ -1,6 +1,6 @@
 use crate::ApiError;
 use crate::config::AppConfig;
-use crate::duckdb::DuckDbEngine;
+use crate::storage::DuckDbEngine;
 
 #[derive(Clone)]
 pub(crate) struct AppState {

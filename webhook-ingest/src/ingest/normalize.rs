@@ -1,15 +1,13 @@
+mod event_kind;
+mod extract;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use self::event_kind::derive_event_kind;
+use self::extract::{extract_nested_timestamp, extract_statuses, extract_timestamp, status_csv};
 use crate::IngestError;
-
-pub(crate) const EVENT_KIND_CREATE_DRAFT: &str = "CREATE_DRAFT";
-pub(crate) const EVENT_KIND_CREATE_PUBLISH: &str = "CREATE_PUBLISH";
-pub(crate) const EVENT_KIND_FIRST_PUBLISH: &str = "FIRST_PUBLISH";
-pub(crate) const EVENT_KIND_UPDATE_PUBLISH: &str = "UPDATE_PUBLISH";
-pub(crate) const EVENT_KIND_UNPUBLISH: &str = "UNPUBLISH";
-pub(crate) const EVENT_KIND_DELETE: &str = "DELETE";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NormalizedEvent {
@@ -84,90 +82,9 @@ pub fn normalize_payload(
     })
 }
 
-fn derive_event_kind(
-    event_type: Option<&str>,
-    old_statuses: &[String],
-    new_statuses: &[String],
-) -> Option<String> {
-    let old_published = has_status(old_statuses, "PUBLISH");
-    let new_published = has_status(new_statuses, "PUBLISH");
-    let new_draft = has_status(new_statuses, "DRAFT");
-
-    let event_kind = match event_type {
-        Some("delete") => EVENT_KIND_DELETE,
-        Some("new") if new_published => EVENT_KIND_CREATE_PUBLISH,
-        Some("new") if new_draft => EVENT_KIND_CREATE_DRAFT,
-        Some("edit") if !old_published && new_published => EVENT_KIND_FIRST_PUBLISH,
-        Some("edit") if old_published && new_published => EVENT_KIND_UPDATE_PUBLISH,
-        Some("edit") if old_published && !new_published => EVENT_KIND_UNPUBLISH,
-        _ => return None,
-    };
-
-    Some(event_kind.to_owned())
-}
-
-fn has_status(statuses: &[String], expected: &str) -> bool {
-    statuses.iter().any(|status| status == expected)
-}
-
-fn extract_statuses(value: Option<&Value>) -> Vec<String> {
-    let Some(status) = value
-        .and_then(|value| value.as_object())
-        .and_then(|object| object.get("status"))
-    else {
-        return Vec::new();
-    };
-
-    let mut statuses = match status {
-        Value::String(status) => vec![status.to_owned()],
-        Value::Array(statuses) => statuses
-            .iter()
-            .filter_map(|status| status.as_str().map(ToOwned::to_owned))
-            .collect(),
-        _ => Vec::new(),
-    };
-    statuses.sort();
-    statuses.dedup();
-    statuses
-}
-
-fn status_csv(statuses: &[String]) -> Option<String> {
-    if statuses.is_empty() {
-        None
-    } else {
-        Some(statuses.join(","))
-    }
-}
-
-fn extract_string(value: Option<&Value>, keys: &[&str]) -> Option<String> {
-    let object = value?.as_object()?;
-    keys.iter()
-        .filter_map(|key| object.get(*key))
-        .find_map(|value| value.as_str().map(ToOwned::to_owned))
-}
-
-fn extract_timestamp(value: Option<&Value>, keys: &[&str]) -> Option<DateTime<Utc>> {
-    extract_string(value, keys)
-        .and_then(|value| DateTime::parse_from_rfc3339(&value).ok())
-        .map(|value| value.with_timezone(&Utc))
-}
-
-fn extract_nested_string(value: Option<&Value>, path: &[&str]) -> Option<String> {
-    let mut current = value?;
-    for key in path {
-        current = current.as_object()?.get(*key)?;
-    }
-    current.as_str().map(ToOwned::to_owned)
-}
-
-fn extract_nested_timestamp(value: Option<&Value>, path: &[&str]) -> Option<DateTime<Utc>> {
-    extract_nested_string(value, path)
-        .and_then(|value| DateTime::parse_from_rfc3339(&value).ok())
-        .map(|value| value.with_timezone(&Utc))
-}
-
 #[cfg(test)]
 mod tests {
+    use super::event_kind::{EVENT_KIND_CREATE_DRAFT, EVENT_KIND_FIRST_PUBLISH};
     use super::*;
 
     fn sample_body() -> &'static [u8] {
@@ -298,42 +215,27 @@ mod tests {
             .unwrap()
             .with_timezone(&Utc);
         let cases = [
-            (
-                "new",
-                None,
-                Some(r#"["DRAFT"]"#),
-                Some(EVENT_KIND_CREATE_DRAFT),
-            ),
-            (
-                "new",
-                None,
-                Some(r#"["PUBLISH"]"#),
-                Some(EVENT_KIND_CREATE_PUBLISH),
-            ),
+            ("new", None, Some(r#"["DRAFT"]"#), Some("CREATE_DRAFT")),
+            ("new", None, Some(r#"["PUBLISH"]"#), Some("CREATE_PUBLISH")),
             (
                 "edit",
                 Some(r#"["DRAFT"]"#),
                 Some(r#"["PUBLISH"]"#),
-                Some(EVENT_KIND_FIRST_PUBLISH),
+                Some("FIRST_PUBLISH"),
             ),
             (
                 "edit",
                 Some(r#"["PUBLISH"]"#),
                 Some(r#"["PUBLISH"]"#),
-                Some(EVENT_KIND_UPDATE_PUBLISH),
+                Some("UPDATE_PUBLISH"),
             ),
             (
                 "edit",
                 Some(r#"["PUBLISH"]"#),
                 Some(r#"["DRAFT"]"#),
-                Some(EVENT_KIND_UNPUBLISH),
+                Some("UNPUBLISH"),
             ),
-            (
-                "delete",
-                Some(r#"["PUBLISH"]"#),
-                None,
-                Some(EVENT_KIND_DELETE),
-            ),
+            ("delete", Some(r#"["PUBLISH"]"#), None, Some("DELETE")),
             ("edit", Some(r#"["DRAFT"]"#), Some(r#"["DRAFT"]"#), None),
         ];
 

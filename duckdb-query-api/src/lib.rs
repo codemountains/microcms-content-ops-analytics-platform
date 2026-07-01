@@ -1,20 +1,18 @@
 mod config;
-mod duckdb;
 mod error;
-mod metrics;
-mod routes;
-mod state;
-mod validation;
+mod handler;
+mod query;
+mod storage;
 
 pub use config::AppConfig;
 pub use error::ApiError;
-pub use metrics::{
+pub use query::{
     ApiActivityRow, AverageDraftToPublishRow, AverageTimeToPublishRow, CalendarHeatmapRow,
     TopUpdatedContentRow,
 };
 
 pub fn try_app(config: AppConfig) -> Result<axum::Router, ApiError> {
-    routes::app(state::AppState::try_new(config)?)
+    handler::app(handler::AppState::try_new(config)?)
 }
 
 pub fn app(config: AppConfig) -> axum::Router {
@@ -29,13 +27,13 @@ mod tests {
     use chrono::{Duration, NaiveDate, TimeZone, Utc};
     use tempfile::tempdir;
 
-    use crate::duckdb::{DuckDbEngine, sql_string_literal};
-    use crate::metrics::{
+    use crate::handler::PublishDurationUnit;
+    use crate::query::{
         format_partition_time, query_api_activity_rows, query_average_draft_to_publish_rows,
         query_average_time_to_publish_rows, query_calendar_heatmap_rows,
         query_top_updated_contents_rows,
     };
-    use crate::validation::PublishDurationUnit;
+    use crate::storage::{DuckDbEngine, sql_string_literal};
 
     #[tokio::test]
     async fn queries_refreshed_metrics_from_local_hive_partitioned_parquet() {

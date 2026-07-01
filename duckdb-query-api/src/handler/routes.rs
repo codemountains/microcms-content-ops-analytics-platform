@@ -5,16 +5,15 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+use super::{
+    AppState, validate_days, validate_limit, validate_publish_duration_unit, validate_time_range,
+};
 use crate::ApiError;
-use crate::metrics::{
+use crate::query::{
     ApiActivityRow, AverageDraftToPublishRow, AverageTimeToPublishRow, CalendarHeatmapRow,
     TopUpdatedContentRow, query_api_activity_rows, query_average_draft_to_publish_rows,
     query_average_time_to_publish_rows, query_calendar_heatmap_rows,
     query_top_updated_contents_rows,
-};
-use crate::state::AppState;
-use crate::validation::{
-    validate_days, validate_limit, validate_publish_duration_unit, validate_time_range,
 };
 
 #[derive(Debug, Deserialize)]

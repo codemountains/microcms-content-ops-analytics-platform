@@ -2,7 +2,7 @@ use duckdb::Connection;
 
 use super::event_kind;
 use super::{AverageTimeToPublishRow, JST_OFFSET_INTERVAL, collect_rows};
-use crate::validation::PublishDurationUnit;
+use crate::handler::PublishDurationUnit;
 
 pub(crate) fn query_average_time_to_publish_rows(
     connection: &Connection,

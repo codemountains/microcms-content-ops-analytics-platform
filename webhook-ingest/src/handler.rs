@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use self::response::{error_response, success_response};
 use crate::config::Config;
-use crate::s3::client_from_env;
+use crate::storage::client_from_env;
 use crate::{IngestError, build_s3_key, event_to_parquet, normalize_payload, verify_signature};
 
 #[derive(Clone)]
