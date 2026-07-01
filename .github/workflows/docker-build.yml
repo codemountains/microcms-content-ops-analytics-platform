@@ -1,0 +1,29 @@
+name: Docker Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOCKER_BUILDKIT: "1"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Build webhook-ingest image
+        run: docker build --build-arg CARGO_PROFILE=debug --build-arg CARGO_BUILD_JOBS=1 -f webhook-ingest/Dockerfile -t webhook-ingest:ci .
+
+      - name: Build duckdb-query-api image
+        run: docker build --build-arg CARGO_PROFILE=debug --build-arg CARGO_BUILD_JOBS=1 -f duckdb-query-api/Dockerfile -t duckdb-query-api:ci .

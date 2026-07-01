@@ -3,47 +3,60 @@
 
 require "yaml"
 
-workflow_path = ".github/workflows/ci.yml"
-
-abort "Missing #{workflow_path}" unless File.file?(workflow_path)
-
-workflow = YAML.safe_load(File.read(workflow_path), aliases: true)
-raw = File.read(workflow_path)
-
 def assert(condition, message)
   abort message unless condition
 end
 
-jobs = workflow.fetch("jobs")
-
-required_jobs = %w[
-  gitleaks
-  rust-fmt
-  webhook-ingest-test
-  duckdb-query-api-test
-  rust-clippy
-  infra-validate
-  iac-fmt
-  docker-build
+workflow_paths = Dir[".github/workflows/*.yml"].sort
+expected_paths = %w[
+  .github/workflows/docker-build.yml
+  .github/workflows/infra.yml
+  .github/workflows/rust.yml
+  .github/workflows/security.yml
 ]
 
-required_jobs.each do |job|
-  assert jobs.key?(job), "Missing CI job: #{job}"
+assert workflow_paths == expected_paths,
+       "Workflow files must be split by concern: #{expected_paths.join(', ')}"
+
+raw_by_path = workflow_paths.to_h { |path| [path, File.read(path)] }
+workflow_by_path = raw_by_path.transform_values { |raw| YAML.safe_load(raw, aliases: true) }
+
+workflow_by_path.each do |path, workflow|
+  raw = raw_by_path.fetch(path)
+
+  assert raw.match?(/^\s*pull_request:\s*$/), "#{path} must run on pull_request"
+  assert raw.match?(/^\s*push:\s*$/), "#{path} must run on push"
+  assert raw.match?(/^\s*branches:\s*\[\s*main\s*\]\s*$/), "#{path} push trigger must target main"
+  assert workflow.dig("concurrency", "cancel-in-progress") == true,
+         "#{path} concurrency must cancel in-progress runs"
+  assert workflow.fetch("permissions").fetch("contents") == "read",
+         "#{path} must use read-only contents permission"
 end
 
-assert raw.match?(/^\s*pull_request:\s*$/), "CI must run on pull_request"
-assert raw.match?(/^\s*push:\s*$/), "CI must run on push"
-assert raw.match?(/^\s*branches:\s*\[\s*main\s*\]\s*$/), "CI push trigger must target main"
-assert workflow.dig("concurrency", "cancel-in-progress") == true,
-       "CI concurrency must cancel in-progress runs"
+combined_raw = raw_by_path.values.join("\n")
 
-uses_entries = raw.scan(/^\s*uses:\s*([^\s#]+)(?:\s+#.*)?$/).flatten
+uses_entries = combined_raw.scan(/^\s*uses:\s*([^\s#]+)(?:\s+#.*)?$/).flatten
 assert uses_entries.any?, "CI workflow must use pinned actions"
 
 uses_entries.each do |entry|
   next if entry.match?(/\A[^@\s]+@[0-9a-f]{40}\z/)
 
   abort "Action is not pinned to a 40-character SHA: #{entry}"
+end
+
+required_jobs_by_path = {
+  ".github/workflows/security.yml" => %w[gitleaks],
+  ".github/workflows/rust.yml" => %w[fmt webhook-ingest-test duckdb-query-api-test clippy],
+  ".github/workflows/infra.yml" => %w[validate fmt],
+  ".github/workflows/docker-build.yml" => %w[smoke]
+}
+
+required_jobs_by_path.each do |path, required_jobs|
+  jobs = workflow_by_path.fetch(path).fetch("jobs")
+
+  required_jobs.each do |job|
+    assert jobs.key?(job), "Missing job #{job} in #{path}"
+  end
 end
 
 required_commands = [
@@ -65,5 +78,5 @@ required_commands = [
 ]
 
 required_commands.each do |command|
-  assert raw.include?(command), "Missing CI command: #{command}"
+  assert combined_raw.include?(command), "Missing CI command: #{command}"
 end

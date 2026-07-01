@@ -1,0 +1,48 @@
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_VERSION: "8.30.1"
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Scan repository
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITLEAKS_VERSION: ${{ env.GITLEAKS_VERSION }}
+
+      - name: Verify dummy secret detection
+        run: |
+          gitleaks_bin="/tmp/gitleaks-${GITLEAKS_VERSION}/gitleaks"
+          test -x "$gitleaks_bin"
+          tmpdir="$(mktemp -d)"
+          printf 'GITHUB_TOKEN=%s%s\n' 'ghp_' '0123456789abcdefghijABCDEFGHIJ123456' > "$tmpdir/.env"
+          set +e
+          "$gitleaks_bin" dir "$tmpdir" --redact --no-banner --exit-code 2
+          status="$?"
+          set -e
+          rm -rf "$tmpdir"
+          if [ "$status" -ne 2 ]; then
+            echo "Expected Gitleaks to detect the dummy secret, got exit code $status" >&2
+            exit 1
+          fi
