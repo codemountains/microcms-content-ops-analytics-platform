@@ -32,31 +32,7 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --all --check
 
-  webhook-ingest-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
-      - name: Test webhook-ingest
-        run: cargo test -p webhook-ingest
-
-  duckdb-query-api-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
-      - name: Test duckdb-query-api
-        run: cargo test -p duckdb-query-api
-
-  clippy:
+  webhook-ingest-test-and-clippy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -68,5 +44,26 @@ jobs:
       - name: Install Clippy
         run: rustup component add clippy
 
-      - name: Run Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test webhook-ingest
+        run: cargo test -p webhook-ingest
+
+      - name: Run webhook-ingest Clippy
+        run: cargo clippy -p webhook-ingest --all-targets -- -D warnings
+
+  duckdb-query-api-test-and-clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Install Clippy
+        run: rustup component add clippy
+
+      - name: Test duckdb-query-api
+        run: cargo test -p duckdb-query-api
+
+      - name: Run duckdb-query-api Clippy
+        run: cargo clippy -p duckdb-query-api --all-targets -- -D warnings

@@ -249,6 +249,7 @@ just check-ci
 
 CI は Gitleaks secret scan、Rust fmt/test/clippy、OpenTofu/Docker Compose/Grafana の validate、OpenTofu fmt check、Docker build smoke を実行します。
 workflow は責務ごとに `security.yml`、`rust.yml`、`infra.yml`、`docker-build.yml` へ分割しています。
+`rust.yml` は backend ごとに `webhook-ingest-test-and-clippy` と `duckdb-query-api-test-and-clippy` を分け、各 backend の test と clippy を同じ job で実行して重複ビルドを抑えます。
 Gitleaks は Marketplace action の最新確認済み version を使い、`just check-ci` は Gitleaks 以外の主要検証をローカルで再現します。
 organization repository で Gitleaks action を使う場合は、repository または organization secret として `GITLEAKS_LICENSE` が必要です。
 GitHub Actions の `uses:` は supply-chain risk を抑えるため、tag ではなく commit SHA に pin しています。

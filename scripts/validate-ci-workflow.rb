@@ -46,7 +46,7 @@ end
 
 required_jobs_by_path = {
   ".github/workflows/security.yml" => %w[gitleaks],
-  ".github/workflows/rust.yml" => %w[fmt webhook-ingest-test duckdb-query-api-test clippy],
+  ".github/workflows/rust.yml" => %w[fmt webhook-ingest-test-and-clippy duckdb-query-api-test-and-clippy],
   ".github/workflows/infra.yml" => %w[validate fmt],
   ".github/workflows/docker-build.yml" => %w[smoke]
 }
@@ -70,7 +70,8 @@ required_commands = [
   "cargo fmt --all --check",
   "cargo test -p webhook-ingest",
   "cargo test -p duckdb-query-api",
-  "cargo clippy --workspace --all-targets -- -D warnings",
+  "cargo clippy -p webhook-ingest --all-targets -- -D warnings",
+  "cargo clippy -p duckdb-query-api --all-targets -- -D warnings",
   "just validate-ci",
   "tofu fmt -check -recursive infra",
   "docker build --build-arg CARGO_PROFILE=debug --build-arg CARGO_BUILD_JOBS=1 -f webhook-ingest/Dockerfile -t webhook-ingest:ci .",
