@@ -281,22 +281,40 @@ Response example:
 
 #### `GET /metrics/average-time-to-publish-by-api`
 
-API ごとに、コンテンツ作成 (`createdAt`) から初回公開 (`publishedAt`) までの平均所要日数を返す。
+API ごとに、コンテンツ作成 (`createdAt`) から初回公開 (`publishedAt`) までの平均所要時間を返す。
 `event_kind IN ('CREATE_PUBLISH', 'FIRST_PUBLISH')` を対象にし、timestamp は `contents.new.publishValue` から抽出した値を使う。
+`unit` により平均日数または平均時間を選択する。
 
 Query parameters:
 
 | Parameter | Default | 説明 |
 | --- | --- | --- |
 | `days` | `30` | 集計対象期間 |
+| `unit` | `days` | `days` または `hours` |
 
-Response example:
+レスポンスは Grafana JSON API datasource が各 JSONPath を同じ長さの field として扱えるよう、`avg_days` と `avg_hours` の両方を返す。
+選択していない unit の field は `null` とする。
+
+`unit=days` response example:
 
 ```json
 [
   {
     "api": "blogs",
-    "avg_days": 1.25
+    "avg_days": 1.25,
+    "avg_hours": null
+  }
+]
+```
+
+`unit=hours` response example:
+
+```json
+[
+  {
+    "api": "blogs",
+    "avg_days": null,
+    "avg_hours": 30.0
   }
 ]
 ```
@@ -496,6 +514,8 @@ GROUP BY api
 ORDER BY avg_days DESC, api;
 ```
 
+`unit=hours` の場合は、同じ秒差を `/ 3600.0` して `avg_hours` として返す。
+
 ## 7.5 Average Draft to Publish by API
 
 ```sql
@@ -564,7 +584,10 @@ Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキ
 ダッシュボードの time range（既定 `now-365d`）を `${__from}` / `${__to}` として API に渡す。
 ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
 Top Updated Contents は API response の `count` field を Table 上では `updated_count` として表示し、`last_event_at` は field override で `dateTimeAsLocal` 表示とする。
-Average Time to Publish by API は green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。
+Average Time to Publish by API は dashboard variable `publish_duration_unit` により `days` / `hours` を切り替え、API には `unit=${publish_duration_unit}` を渡す。
+初期値は `days` とする。
+`days` 表示では `avg_days` を描画し、green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。
+`hours` 表示では `avg_hours` を描画し、green `< 24h`、yellow `< 72h`、red `>= 72h` の threshold を使う。
 Average Draft to Publish by API は Average Time to Publish by API と並置し、duration chart では `avg_days` のみを描画する。API response の `sample_count` は平均算出件数の確認用であり、日数 series として描画しない。
 
 ## 9. セキュリティ仕様

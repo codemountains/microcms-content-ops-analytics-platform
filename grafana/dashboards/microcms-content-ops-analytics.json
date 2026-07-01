@@ -210,27 +210,73 @@
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg_days"
+            },
+            "properties": [
               {
-                "color": "green",
-                "value": null
+                "id": "unit",
+                "value": "d"
               },
               {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 3
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 3
+                    }
+                  ]
+                }
               }
             ]
           },
-          "unit": "d"
-        },
-        "overrides": []
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg_hours"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "h"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 24
+                    },
+                    {
+                      "color": "red",
+                      "value": 72
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
@@ -264,10 +310,15 @@
               "jsonPath": "$[*].avg_days",
               "name": "avg_days",
               "type": "number"
+            },
+            {
+              "jsonPath": "$[*].avg_hours",
+              "name": "avg_hours",
+              "type": "number"
             }
           ],
           "method": "GET",
-          "queryParams": "days=30",
+          "queryParams": "days=30&unit=${publish_duration_unit}",
           "refId": "A",
           "urlPath": "/metrics/average-time-to-publish-by-api"
         }
@@ -355,7 +406,35 @@
     "content-ops"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "days",
+          "value": "days"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "publish_duration_unit",
+        "options": [
+          {
+            "selected": true,
+            "text": "days",
+            "value": "days"
+          },
+          {
+            "selected": false,
+            "text": "hours",
+            "value": "hours"
+          }
+        ],
+        "query": "days,hours",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
   },
   "time": {
     "from": "now-365d",
@@ -365,5 +444,5 @@
   "timezone": "Asia/Tokyo",
   "title": "microCMS Content Ops Analytics",
   "uid": "microcms-content-ops",
-  "version": 4
+  "version": 5
 }
