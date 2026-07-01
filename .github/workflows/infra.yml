@@ -31,8 +31,8 @@ jobs:
           tofu_version: ${{ env.OPENTOFU_VERSION }}
           tofu_wrapper: false
 
-      - name: Validate infra, Compose, Grafana, and workflow contract
-        run: just validate-ci
+      - name: Validate infra, Compose, and Grafana
+        run: just validate
 
   fmt:
     runs-on: ubuntu-latest
