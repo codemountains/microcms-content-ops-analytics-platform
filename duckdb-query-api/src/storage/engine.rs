@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 
 use duckdb::Connection;
 
@@ -11,9 +14,12 @@ pub(crate) struct DuckDbEngine {
 }
 
 struct DuckDbEngineInner {
-    connection: Mutex<Connection>,
+    connections: Vec<Mutex<Connection>>,
     events_sql: Arc<str>,
+    next_connection: AtomicUsize,
 }
+
+const DEFAULT_POOL_SIZE: usize = 4;
 
 impl DuckDbEngine {
     pub(crate) fn new(
@@ -24,23 +30,44 @@ impl DuckDbEngine {
         s3_url_style: &str,
         s3_use_ssl: bool,
     ) -> Result<Self, ApiError> {
-        let connection =
-            Connection::open_in_memory().map_err(|error| ApiError::DuckDb(error.to_string()))?;
-        configure_connection(
-            &connection,
-            aws_region,
+        Self::new_with_pool_size(
             events_path,
+            aws_region,
             extension_directory,
             s3_endpoint,
             s3_url_style,
             s3_use_ssl,
+            DEFAULT_POOL_SIZE,
         )
-        .map_err(|error| ApiError::DuckDb(error.to_string()))?;
+    }
+
+    pub(crate) fn new_with_pool_size(
+        events_path: &str,
+        aws_region: &str,
+        extension_directory: &str,
+        s3_endpoint: Option<&str>,
+        s3_url_style: &str,
+        s3_use_ssl: bool,
+        pool_size: usize,
+    ) -> Result<Self, ApiError> {
+        let pool_size = pool_size.max(1);
+        let mut connections = Vec::with_capacity(pool_size);
+        for _ in 0..pool_size {
+            connections.push(Mutex::new(configured_connection(
+                events_path,
+                aws_region,
+                extension_directory,
+                s3_endpoint,
+                s3_url_style,
+                s3_use_ssl,
+            )?));
+        }
 
         Ok(Self {
             inner: Arc::new(DuckDbEngineInner {
-                connection: Mutex::new(connection),
+                connections,
                 events_sql: Arc::from(read_parquet_sql(events_path)),
+                next_connection: AtomicUsize::new(0),
             }),
         })
     }
@@ -52,8 +79,9 @@ impl DuckDbEngine {
     {
         let inner = Arc::clone(&self.inner);
         tokio::task::spawn_blocking(move || {
-            let connection = inner
-                .connection
+            let connection_index =
+                inner.next_connection.fetch_add(1, Ordering::Relaxed) % inner.connections.len();
+            let connection = inner.connections[connection_index]
                 .lock()
                 .map_err(|error| ApiError::DuckDb(error.to_string()))?;
             query(&connection, &inner.events_sql)
@@ -62,4 +90,28 @@ impl DuckDbEngine {
         .await
         .map_err(|error| ApiError::DuckDb(error.to_string()))?
     }
+}
+
+fn configured_connection(
+    events_path: &str,
+    aws_region: &str,
+    extension_directory: &str,
+    s3_endpoint: Option<&str>,
+    s3_url_style: &str,
+    s3_use_ssl: bool,
+) -> Result<Connection, ApiError> {
+    let connection =
+        Connection::open_in_memory().map_err(|error| ApiError::DuckDb(error.to_string()))?;
+    configure_connection(
+        &connection,
+        aws_region,
+        events_path,
+        extension_directory,
+        s3_endpoint,
+        s3_url_style,
+        s3_use_ssl,
+    )
+    .map_err(|error| ApiError::DuckDb(error.to_string()))?;
+
+    Ok(connection)
 }

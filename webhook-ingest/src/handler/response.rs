@@ -14,6 +14,10 @@ pub(super) fn success_response(key: String) -> Response<String> {
 }
 
 pub(super) fn error_response(error: IngestError) -> Response<String> {
+    error_response_ref(&error)
+}
+
+pub(super) fn error_response_ref(error: &IngestError) -> Response<String> {
     let status = match error {
         IngestError::MissingSignature | IngestError::InvalidSignature => StatusCode::UNAUTHORIZED,
         IngestError::MissingEnv(_) => StatusCode::INTERNAL_SERVER_ERROR,

@@ -15,6 +15,7 @@ pub fn try_app(config: AppConfig) -> Result<axum::Router, ApiError> {
     handler::app(handler::AppState::try_new(config)?)
 }
 
+#[deprecated(note = "use try_app(config) to handle DuckDB initialization errors explicitly")]
 pub fn app(config: AppConfig) -> axum::Router {
     try_app(config).expect("failed to initialize duckdb-query-api application")
 }
@@ -267,13 +268,14 @@ mod tests {
     #[tokio::test]
     async fn duckdb_engine_reuses_configured_connection_between_requests() {
         let tempdir = tempdir().unwrap();
-        let engine = DuckDbEngine::new(
+        let engine = DuckDbEngine::new_with_pool_size(
             &format!("{}/missing/**/*.parquet", tempdir.path().display()),
             "ap-northeast-1",
             &tempdir.path().join("duckdb_extensions").to_string_lossy(),
             None,
             "vhost",
             true,
+            1,
         )
         .unwrap();
 
@@ -294,5 +296,35 @@ mod tests {
             .unwrap();
 
         assert_eq!(value, 42);
+    }
+
+    #[tokio::test]
+    async fn duckdb_engine_can_use_multiple_initialized_connections() {
+        let tempdir = tempdir().unwrap();
+        let engine = DuckDbEngine::new_with_pool_size(
+            &format!("{}/missing/**/*.parquet", tempdir.path().display()),
+            "ap-northeast-1",
+            &tempdir.path().join("duckdb_extensions").to_string_lossy(),
+            None,
+            "vhost",
+            true,
+            2,
+        )
+        .unwrap();
+
+        engine
+            .query(|connection, _events_sql| {
+                connection.execute_batch("CREATE TEMP TABLE pool_marker AS SELECT 1 AS value")?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        engine
+            .query(|connection, _events_sql| {
+                connection.execute_batch("CREATE TEMP TABLE pool_marker AS SELECT 2 AS value")?;
+                Ok(())
+            })
+            .await
+            .unwrap();
     }
 }

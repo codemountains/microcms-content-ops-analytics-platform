@@ -5,10 +5,10 @@ use std::sync::Arc;
 use aws_sdk_s3::Client as S3Client;
 use bytes::Bytes;
 use chrono::Utc;
-use lambda_http::{Body, Error, IntoResponse, Request};
+use lambda_http::{Body, Error, Request, Response};
 use uuid::Uuid;
 
-use self::response::{error_response, success_response};
+use self::response::{error_response, error_response_ref, success_response};
 use crate::config::Config;
 use crate::storage::client_from_env;
 use crate::{IngestError, build_s3_key, event_to_parquet, normalize_payload, verify_signature};
@@ -28,7 +28,19 @@ impl AppState {
     }
 }
 
-pub async fn handler(request: Request, state: AppState) -> Result<impl IntoResponse, Error> {
+pub type AppStateInit = Result<AppState, Arc<IngestError>>;
+
+pub async fn handler_from_init(
+    request: Request,
+    state: AppStateInit,
+) -> Result<Response<String>, Error> {
+    match state {
+        Ok(state) => handler(request, state).await,
+        Err(error) => Ok(error_response_ref(&error)),
+    }
+}
+
+pub async fn handler(request: Request, state: AppState) -> Result<Response<String>, Error> {
     let signature = match header_value(&request, "x-microcms-signature") {
         Some(signature) => signature.to_owned(),
         None => return Ok(error_response(IngestError::MissingSignature)),
@@ -96,4 +108,27 @@ fn header_value<'a>(request: &'a Request, name: &str) -> Option<&'a str> {
                 .get(name.to_ascii_lowercase())
                 .and_then(|value| value.to_str().ok())
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use lambda_http::Request;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn returns_json_error_when_state_initialization_failed() {
+        let response = handler_from_init(
+            Request::default(),
+            Err(Arc::new(IngestError::MissingEnv("EVENT_BUCKET"))),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.status(), 500);
+        assert_eq!(
+            response.body(),
+            r#"{"message":"missing required environment variable: EVENT_BUCKET","ok":false}"#
+        );
+    }
 }
