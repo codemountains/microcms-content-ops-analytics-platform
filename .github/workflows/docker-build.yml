@@ -1,0 +1,66 @@
+name: Docker Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOCKER_BUILDKIT: "1"
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docker_any: ${{ steps.filter.outputs.docker_any }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Detect Docker build changes
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"
+          elif [ -n "$PUSH_BEFORE" ] && ! printf '%s' "$PUSH_BEFORE" | grep -Eq '^0+$'; then
+            base="$PUSH_BEFORE"
+          else
+            base="$(git rev-list --max-parents=0 "$GITHUB_SHA")"
+          fi
+
+          git cat-file -e "$base^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$base"
+          git diff --name-only "$base" "$GITHUB_SHA" > changed-files.txt
+
+          docker_any=false
+          if grep -Eq '^(webhook-ingest/|duckdb-query-api/|Cargo\.toml$|Cargo\.lock$|\.dockerignore$|\.github/workflows/docker-build\.yml$)' changed-files.txt; then
+            docker_any=true
+          fi
+
+          echo "docker_any=$docker_any" >> "$GITHUB_OUTPUT"
+
+  smoke:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.docker_any == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Build webhook-ingest image
+        run: docker build --build-arg CARGO_PROFILE=debug --build-arg CARGO_BUILD_JOBS=1 -f webhook-ingest/Dockerfile -t webhook-ingest:ci .
+
+      - name: Build duckdb-query-api image
+        run: docker build --build-arg CARGO_PROFILE=debug --build-arg CARGO_BUILD_JOBS=1 -f duckdb-query-api/Dockerfile -t duckdb-query-api:ci .
