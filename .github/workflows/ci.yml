@@ -27,40 +27,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create dummy secret commit
-        run: |
-          git config user.name "ci-gitleaks-smoke"
-          git config user.email "ci-gitleaks-smoke@example.invalid"
-          printf 'AWS_SECRET_ACCESS_KEY=%s\n' 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' > gitleaks-smoke.env
-          git add gitleaks-smoke.env
-          git commit -m "test: add dummy secret for gitleaks smoke"
-
-      - name: Verify dummy secret detection
-        id: dummy-secret-scan
-        continue-on-error: true
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-          GITLEAKS_ENABLE_COMMENTS: "false"
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
-          GITLEAKS_ENABLE_SUMMARY: "false"
-          GITLEAKS_VERSION: ${{ env.GITLEAKS_VERSION }}
-
-      - name: Assert dummy secret was detected
-        run: |
-          git reset --hard HEAD~1
-          if [ "${{ steps.dummy-secret-scan.outcome }}" != "failure" ]; then
-            echo "Expected Gitleaks action to fail on the dummy secret commit" >&2
-            exit 1
-          fi
-
       - name: Scan repository
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
           GITLEAKS_VERSION: ${{ env.GITLEAKS_VERSION }}
+
+      - name: Verify dummy secret detection
+        run: |
+          gitleaks_bin="/tmp/gitleaks-${GITLEAKS_VERSION}/gitleaks"
+          test -x "$gitleaks_bin"
+          tmpdir="$(mktemp -d)"
+          printf 'AWS_SECRET_ACCESS_KEY=%s\n' 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' > "$tmpdir/.env"
+          set +e
+          "$gitleaks_bin" dir "$tmpdir" --redact --no-banner --exit-code 2
+          status="$?"
+          set -e
+          rm -rf "$tmpdir"
+          if [ "$status" -ne 2 ]; then
+            echo "Expected Gitleaks to detect the dummy secret, got exit code $status" >&2
+            exit 1
+          fi
 
   rust-fmt:
     runs-on: ubuntu-latest
@@ -70,6 +58,9 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Install rustfmt
+        run: rustup component add rustfmt
 
       - name: Check Rust formatting
         run: cargo fmt --all --check
@@ -106,6 +97,9 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Install Clippy
+        run: rustup component add clippy
 
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
