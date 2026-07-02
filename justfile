@@ -99,6 +99,36 @@ debug-webhook:
     ./scripts/debug-webhook.sh "{{local_dir}}"
     @just debug-parquet-persist
 
+# Generate smoke debug Parquet files locally and sync them to Floci S3.
+debug-parquet-seed:
+    cargo run -p webhook-ingest --bin debug-parquet-seed -- --preset smoke --output-dir "{{debug_parquet_dir}}"
+    @just debug-parquet-sync
+
+# Generate one year of bulk debug Parquet files locally and sync them to Floci S3.
+debug-parquet-seed-large:
+    cargo run -p webhook-ingest --bin debug-parquet-seed -- \
+      --preset bulk \
+      --count "${DEBUG_SEED_COUNT:-10000}" \
+      --days "${DEBUG_SEED_DAYS:-365}" \
+      --output-dir "{{debug_parquet_dir}}"
+    @just debug-parquet-sync
+
+# Sync generated debug Parquet files from the local directory to Floci S3.
+debug-parquet-sync:
+    @bucket="$(tofu -chdir={{local_dir}} output -raw event_bucket_name 2>/dev/null || true)"; \
+    if [ -z "$bucket" ]; then \
+      echo "Local event bucket is unavailable. Run 'just debug-apply' first." >&2; \
+      exit 1; \
+    fi; \
+    AWS_ENDPOINT_URL={{floci_endpoint}} AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_REGION={{aws_region}} \
+      aws s3 sync \
+        "{{debug_parquet_dir}}/microcms_events/" \
+        "s3://$bucket/microcms_events/" \
+        --delete \
+        --exclude "*" \
+        --include "*.parquet"; \
+    echo "Synced debug Parquet files to s3://$bucket/microcms_events/."
+
 # Persist local Floci S3 Parquet objects to a git-ignored directory.
 debug-parquet-persist:
     @mkdir -p "{{debug_parquet_dir}}"
@@ -141,7 +171,7 @@ debug-s3-ls:
         --prefix microcms_events/ \
         --output json)" || exit 1; \
     if [ "$(printf '%s' "$objects" | jq '.Contents // [] | length')" = "0" ]; then \
-      echo "No objects found under s3://$bucket/microcms_events/. Run 'just debug-webhook' first to create a sample event."; \
+      echo "No objects found under s3://$bucket/microcms_events/. Run 'just debug-webhook' or 'just debug-parquet-seed' first to create sample events."; \
     else \
       printf 'LastModified\tSize\tKey\n'; \
       printf '%s' "$objects" | jq -r '.Contents[] | [.LastModified, (.Size | tostring), .Key] | @tsv'; \

@@ -267,6 +267,8 @@ GitHub Actions の `uses:` は supply-chain risk を抑えるため、tag では
 | `just check` | format、test、clippy、validate を一括実行 |
 | `just debug` | Floci/ngrok/Grafana を使うローカルデバッグ環境を起動 |
 | `just debug-webhook` | ローカル API Gateway に署名付き sample webhook を送信 |
+| `just debug-parquet-seed` | smoke 用ダミー Parquet を生成し、ローカル `microcms_events/` をクリアしたうえで Floci S3 に `--delete` sync |
+| `just debug-parquet-seed-large` | 1 年分（既定 10,000 件 / 365 日）の bulk ダミー Parquet を生成し、Floci S3 に `--delete` sync |
 | `just debug-parquet-persist` | Floci S3 の debug Parquet を `.debug/parquet/` に保存 |
 | `just debug-parquet-delete` | debug で生成した Parquet を削除 |
 | `just debug-metrics` | Query API の health/metrics を確認 |
