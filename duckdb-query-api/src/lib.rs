@@ -223,7 +223,12 @@ mod tests {
                         4,
                         PublishDurationUnit::Days,
                     )?,
-                    query_average_draft_to_publish_rows(connection, events_sql, 4)?,
+                    query_average_draft_to_publish_rows(
+                        connection,
+                        events_sql,
+                        4,
+                        PublishDurationUnit::Days,
+                    )?,
                 ))
             })
             .await
@@ -261,7 +266,8 @@ mod tests {
 
         assert_eq!(draft_duration.len(), 1);
         assert_eq!(draft_duration[0].api.as_deref(), Some("blogs"));
-        assert_eq!(draft_duration[0].avg_days, 5.0);
+        assert_eq!(draft_duration[0].avg_days, Some(5.0));
+        assert_eq!(draft_duration[0].avg_hours, None);
         assert_eq!(draft_duration[0].sample_count, 1);
     }
 

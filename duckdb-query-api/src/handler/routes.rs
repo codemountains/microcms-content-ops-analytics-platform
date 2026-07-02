@@ -123,13 +123,14 @@ async fn average_time_to_publish_by_api(
 
 async fn average_draft_to_publish_by_api(
     State(state): State<AppState>,
-    Query(query): Query<DaysQuery>,
+    Query(query): Query<AverageTimeToPublishQuery>,
 ) -> Result<Json<Vec<AverageDraftToPublishRow>>, ApiError> {
     let days = validate_days(query.days)?;
+    let unit = validate_publish_duration_unit(query.unit.as_deref())?;
     state
         .duckdb
         .query(move |connection, events_sql| {
-            query_average_draft_to_publish_rows(connection, events_sql, days)
+            query_average_draft_to_publish_rows(connection, events_sql, days, unit)
         })
         .await
         .map(Json)

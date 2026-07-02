@@ -57,7 +57,8 @@ pub struct AverageTimeToPublishRow {
 #[derive(Debug, Serialize)]
 pub struct AverageDraftToPublishRow {
     pub api: Option<String>,
-    pub avg_days: f64,
+    pub avg_days: Option<f64>,
+    pub avg_hours: Option<f64>,
     pub sample_count: i64,
 }
 

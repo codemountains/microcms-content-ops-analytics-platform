@@ -40,6 +40,7 @@
       },
       "targets": [
         {
+          "cacheDurationSeconds": 0,
           "fields": [
             {
               "jsonPath": "$[*].time",
@@ -93,6 +94,7 @@
       },
       "targets": [
         {
+          "cacheDurationSeconds": 0,
           "fields": [
             {
               "jsonPath": "$[*].api",
@@ -173,6 +175,7 @@
       },
       "targets": [
         {
+          "cacheDurationSeconds": 0,
           "fields": [
             {
               "jsonPath": "$[*].api",
@@ -300,6 +303,7 @@
       },
       "targets": [
         {
+          "cacheDurationSeconds": 0,
           "fields": [
             {
               "jsonPath": "$[*].api",
@@ -318,12 +322,32 @@
             }
           ],
           "method": "GET",
-          "queryParams": "days=30&unit=${publish_duration_unit}",
+          "params": [
+            [
+              "days",
+              "30"
+            ],
+            [
+              "unit",
+              "${publish_duration_unit}"
+            ]
+          ],
+          "queryParams": "",
           "refId": "A",
           "urlPath": "/metrics/average-time-to-publish-by-api"
         }
       ],
       "title": "Average Time to Publish by API",
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "^(api|avg_${publish_duration_unit})$"
+            }
+          }
+        }
+      ],
       "type": "barchart"
     },
     {
@@ -332,27 +356,73 @@
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg_days"
+            },
+            "properties": [
               {
-                "color": "green",
-                "value": null
+                "id": "unit",
+                "value": "d"
               },
               {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 3
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 3
+                    }
+                  ]
+                }
               }
             ]
           },
-          "unit": "d"
-        },
-        "overrides": []
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg_hours"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "h"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 24
+                    },
+                    {
+                      "color": "red",
+                      "value": 72
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
@@ -376,6 +446,7 @@
       },
       "targets": [
         {
+          "cacheDurationSeconds": 0,
           "fields": [
             {
               "jsonPath": "$[*].api",
@@ -386,15 +457,40 @@
               "jsonPath": "$[*].avg_days",
               "name": "avg_days",
               "type": "number"
+            },
+            {
+              "jsonPath": "$[*].avg_hours",
+              "name": "avg_hours",
+              "type": "number"
             }
           ],
           "method": "GET",
-          "queryParams": "days=30",
+          "params": [
+            [
+              "days",
+              "30"
+            ],
+            [
+              "unit",
+              "${publish_duration_unit}"
+            ]
+          ],
+          "queryParams": "",
           "refId": "A",
           "urlPath": "/metrics/average-draft-to-publish-by-api"
         }
       ],
       "title": "Average Draft to Publish by API",
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "^(api|avg_${publish_duration_unit})$"
+            }
+          }
+        }
+      ],
       "type": "barchart"
     }
   ],

@@ -38,6 +38,10 @@ run_jq "dashboard JSON must be valid" empty
 
 run_jq "dashboard timezone must be Asia/Tokyo" -e '.timezone == "Asia/Tokyo"'
 
+run_jq "all panel queries disable JSON datasource cache" -e '
+  [.panels[].targets[] | select(.cacheDurationSeconds != 0)] | length == 0
+'
+
 run_jq "Calendar Heatmap panel wiring" -e '
   .panels[]
   | select(.title == "Calendar Heatmap")
@@ -97,13 +101,26 @@ run_jq "Average Time to Publish by API panel wiring" -e '
   .panels[]
   | select(.title == "Average Time to Publish by API")
   | .targets[]
+  | select(.urlPath == "/metrics/average-time-to-publish-by-api")
+  | select(.cacheDurationSeconds == 0)
   | select(
-      .urlPath == "/metrics/average-time-to-publish-by-api"
-      and .queryParams == "days=30&unit=${publish_duration_unit}"
+      (.params // []) as $params
+      | any($params[]; .[0] == "days" and .[1] == "30")
+        and any($params[]; .[0] == "unit" and .[1] == "${publish_duration_unit}")
     )
   | .fields as $fields
   | any($fields[]; .jsonPath == "$[*].avg_days" and .name == "avg_days" and .type == "number")
     and any($fields[]; .jsonPath == "$[*].avg_hours" and .name == "avg_hours" and .type == "number")
+'
+
+run_jq "Average Time to Publish by API duration field filter" -e '
+  .panels[]
+  | select(.title == "Average Time to Publish by API")
+  | .transformations[]
+  | select(
+      .id == "filterFieldsByName"
+        and .options.include.pattern == "^(api|avg_${publish_duration_unit})$"
+    )
 '
 
 run_jq "Average Time to Publish by API duration thresholds" -e '
@@ -139,7 +156,52 @@ run_jq "Average Draft to Publish by API panel wiring" -e '
   | select(.title == "Average Draft to Publish by API")
   | .targets[]
   | select(.urlPath == "/metrics/average-draft-to-publish-by-api")
+  | select(.cacheDurationSeconds == 0)
+  | select(
+      (.params // []) as $params
+      | any($params[]; .[0] == "days" and .[1] == "30")
+        and any($params[]; .[0] == "unit" and .[1] == "${publish_duration_unit}")
+    )
   | .fields as $fields
   | any($fields[]; .jsonPath == "$[*].avg_days" and .name == "avg_days" and .type == "number")
+    and any($fields[]; .jsonPath == "$[*].avg_hours" and .name == "avg_hours" and .type == "number")
     and all($fields[]; .jsonPath != "$[*].sample_count")
+'
+
+run_jq "Average Draft to Publish by API duration field filter" -e '
+  .panels[]
+  | select(.title == "Average Draft to Publish by API")
+  | .transformations[]
+  | select(
+      .id == "filterFieldsByName"
+        and .options.include.pattern == "^(api|avg_${publish_duration_unit})$"
+    )
+'
+
+run_jq "Average Draft to Publish by API duration thresholds" -e '
+  .panels[]
+  | select(.title == "Average Draft to Publish by API")
+  | .fieldConfig.overrides as $overrides
+  | any(
+      $overrides[];
+      .matcher.options == "avg_days"
+        and any(.properties[]; .id == "unit" and .value == "d")
+        and any(
+          .properties[];
+          .id == "thresholds"
+            and (.value.steps | any(.value == 1))
+            and (.value.steps | any(.value == 3))
+        )
+    )
+    and any(
+      $overrides[];
+      .matcher.options == "avg_hours"
+        and any(.properties[]; .id == "unit" and .value == "h")
+        and any(
+          .properties[];
+          .id == "thresholds"
+            and (.value.steps | any(.value == 24))
+            and (.value.steps | any(.value == 72))
+        )
+    )
 '
