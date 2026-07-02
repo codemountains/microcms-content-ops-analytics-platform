@@ -106,6 +106,34 @@ run_jq "Average Time to Publish by API panel wiring" -e '
     and any($fields[]; .jsonPath == "$[*].avg_hours" and .name == "avg_hours" and .type == "number")
 '
 
+run_jq "Average Time to Publish by API duration thresholds" -e '
+  .panels[]
+  | select(.title == "Average Time to Publish by API")
+  | .fieldConfig.overrides as $overrides
+  | any(
+      $overrides[];
+      .matcher.options == "avg_days"
+        and any(.properties[]; .id == "unit" and .value == "d")
+        and any(
+          .properties[];
+          .id == "thresholds"
+            and (.value.steps | any(.value == 1))
+            and (.value.steps | any(.value == 3))
+        )
+    )
+    and any(
+      $overrides[];
+      .matcher.options == "avg_hours"
+        and any(.properties[]; .id == "unit" and .value == "h")
+        and any(
+          .properties[];
+          .id == "thresholds"
+            and (.value.steps | any(.value == 24))
+            and (.value.steps | any(.value == 72))
+        )
+    )
+'
+
 run_jq "Average Draft to Publish by API panel wiring" -e '
   .panels[]
   | select(.title == "Average Draft to Publish by API")

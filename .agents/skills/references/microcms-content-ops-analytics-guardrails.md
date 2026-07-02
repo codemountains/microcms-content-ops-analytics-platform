@@ -33,7 +33,7 @@
 - Webhook signature verification を弱めない。検証失敗時は S3 へ保存しない。
 - Parquet schema、S3 key layout、environment variables、public endpoints を変更する場合は docs 更新要否を必ず判断する。
 - S3 key layout は `microcms_events/service=<service>/api=<api>/dt=<YYYY-MM-DD>/<event_id>.parquet` を基準にする。
-- 現在の主要 API は `GET /health`、`GET /metrics/daily-events`、`GET /metrics/events-by-api`、`GET /metrics/top-edited-contents`、`GET /metrics/status-events`。
+- 現在の主要 API は `GET /health`、`GET /metrics/calendar-heatmap`、`GET /metrics/api-activity`、`GET /metrics/top-updated-contents`、`GET /metrics/average-time-to-publish-by-api`、`GET /metrics/average-draft-to-publish-by-api`。
 - SQL に user input を安易に埋め込まない。固定メトリクス API と parameter validation を維持する。
 
 ## Security And Artifacts
