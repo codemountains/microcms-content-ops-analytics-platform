@@ -600,6 +600,17 @@ Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパ
 | Average Time to Publish by API | `/metrics/average-time-to-publish-by-api` | Horizontal Bar Chart |
 | Average Draft to Publish by API | `/metrics/average-draft-to-publish-by-api` | Horizontal Bar Chart |
 
+各 panel には Grafana 標準の `description` を設定し、パネルタイトル横の情報アイコンから指標定義を確認できるようにする。
+`description` は次の内容と矛盾しないこと。
+
+| パネル | description に含める指標定義 |
+| --- | --- |
+| Calendar Heatmap | Webhook 受信日（S3 パーティション `dt`、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（`${__from}` / `${__to}`）で絞り込み、0 件の日も表示する。 |
+| API Activity | API ごとの `event_kind` 別件数（直近 30 日）。`create_draft` / `create_publish` / `first_publish` / `update_publish` / `unpublish` / `delete` を stacked bar で表示する。 |
+| Top Updated Contents | `event_type IN ('new', 'edit')` かつ `content_id` があるイベントを対象に、更新回数が多いコンテンツ上位 20 件（直近 30 日）を表示する。`updated_count` は API の `count`、`last_event_at` は最終イベント時刻。 |
+| Average Time to Publish by API | API ごとに、コンテンツ作成（`publishValue.createdAt`）から初回公開（`publishValue.publishedAt`）までの平均所要時間を表示する。`CREATE_PUBLISH` と `FIRST_PUBLISH` を対象（直近 30 日）にし、`publish_duration_unit` で日数 / 時間を切り替える。 |
+| Average Draft to Publish by API | API ごとに、下書き作成（`draftValue.createdAt`）から初回公開（`publishValue.publishedAt`）までの平均所要時間を表示する。同一 `api` / `content_id` の `CREATE_DRAFT` と `FIRST_PUBLISH` を結合し、`CREATE_PUBLISH` は含めない。期間フィルタは `FIRST_PUBLISH` 側の `dt` に適用する（直近 30 日）。 |
+
 API Activity は `create_draft_count`、`create_publish_count`、`first_publish_count`、`update_publish_count`、`unpublish_count`、`delete_count` を stacked series として表示する。
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
 ダッシュボードの time range（既定 `now-365d`）を `${__from}` / `${__to}` として API に渡す。
