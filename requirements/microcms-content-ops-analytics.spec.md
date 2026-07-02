@@ -508,7 +508,7 @@ WHERE
   AND event_type IN ('new', 'edit')
   AND content_id IS NOT NULL
 GROUP BY api, content_id
-ORDER BY count DESC, last_event_at DESC
+ORDER BY count DESC, MAX(received_at) DESC
 LIMIT 20;
 ```
 
