@@ -124,6 +124,7 @@ debug-parquet-sync:
       aws s3 sync \
         "{{debug_parquet_dir}}/microcms_events/" \
         "s3://$bucket/microcms_events/" \
+        --delete \
         --exclude "*" \
         --include "*.parquet"; \
     echo "Synced debug Parquet files to s3://$bucket/microcms_events/."
