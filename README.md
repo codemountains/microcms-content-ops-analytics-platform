@@ -250,7 +250,7 @@ just check-ci
 CI は Gitleaks secret scan、Rust fmt/test/clippy、OpenTofu/Docker Compose/Grafana の validate、OpenTofu fmt check、Docker build smoke を実行します。
 workflow は責務ごとに `security.yml`、`rust.yml`、`infra.yml`、`docker-build.yml` へ分割しています。
 `rust.yml` は backend ごとに `webhook-ingest-test-and-clippy` と `duckdb-query-api-test-and-clippy` を分け、各 backend の test と clippy を同じ job で実行して重複ビルドを抑えます。
-`rust.yml`、`infra.yml`、`docker-build.yml` は差分検出 job で重い job の実行を制御します。`webhook-ingest` の変更は `webhook-ingest-test-and-clippy`、`duckdb-query-api` の変更は `duckdb-query-api-test-and-clippy` を実行し、どちらかの backend に関わる変更がある場合だけ Rust fmt と Docker build smoke を実行します。workspace 共通の `Cargo.toml` / `Cargo.lock` と該当 workflow 自身の変更は、両 backend に影響する変更として扱います。`infra.yml` は `infra/`、Compose、Grafana、`justfile`、workflow 自身に関わる変更がある場合だけ validate と OpenTofu fmt check を実行します。
+`rust.yml`、`infra.yml`、`docker-build.yml` は差分検出 job で重い job の実行を制御します。`webhook-ingest` の変更は `webhook-ingest-test-and-clippy`、`duckdb-query-api` の変更は `duckdb-query-api-test-and-clippy` を実行し、どちらかの backend に関わる変更がある場合だけ Rust fmt と Docker build smoke を実行します。workspace 共通の `Cargo.toml` / `Cargo.lock` と該当 workflow 自身の変更は、両 backend に影響する変更として扱います。`infra.yml` は `infra/`、Compose、Grafana、`scripts/`、`justfile`、workflow 自身に関わる変更がある場合だけ validate と OpenTofu fmt check を実行します。
 Gitleaks は Marketplace action の最新確認済み version を使い、`just check-ci` は Gitleaks 以外の主要検証をローカルで再現します。
 organization repository で Gitleaks action を使う場合は、repository または organization secret として `GITLEAKS_LICENSE` が必要です。
 GitHub Actions の `uses:` は supply-chain risk を抑えるため、tag ではなく commit SHA に pin しています。

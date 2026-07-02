@@ -42,14 +42,7 @@ validate:
     tofu -chdir={{local_dir}} validate
     env 'EVENTS_PATH=s3://example-bucket/microcms_events/**/*.parquet' {{compose}} config >/dev/null
     env NGROK_AUTHTOKEN="${NGROK_AUTHTOKEN:-dummy}" {{local_compose}} config >/dev/null
-    jq empty grafana/dashboards/microcms-content-ops-analytics.json
-    jq -e '[.panels[] | select(.title == "API Activity") | .targets[].fields[] | {jsonPath, name, type}] as $fields | all([{"jsonPath":"$[*].create_draft_count","name":"create_draft","type":"number"},{"jsonPath":"$[*].create_publish_count","name":"create_publish","type":"number"},{"jsonPath":"$[*].first_publish_count","name":"first_publish","type":"number"},{"jsonPath":"$[*].update_publish_count","name":"update_publish","type":"number"},{"jsonPath":"$[*].unpublish_count","name":"unpublish","type":"number"},{"jsonPath":"$[*].delete_count","name":"delete","type":"number"}]; $fields | index(.))' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
-    jq -e '.panels[] | select(.title == "Top Updated Contents") | .targets[].fields[] | select(.jsonPath == "$[*].count" and .name == "updated_count" and .type == "number")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
-    jq -e '.panels[] | select(.title == "Top Updated Contents") | .fieldConfig.overrides[] | select(.matcher.options == "last_event_at") | .properties[] | select(.id == "unit" and .value == "dateTimeAsLocal")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
-    jq -e '.templating.list[] | select(.name == "publish_duration_unit" and .type == "custom" and .current.value == "days") | .options as $options | any($options[]; .value == "days") and any($options[]; .value == "hours")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
-    jq -e '.panels[] | select(.title == "Average Time to Publish by API") | .targets[] | select(.urlPath == "/metrics/average-time-to-publish-by-api" and .queryParams == "days=30&unit=${publish_duration_unit}") | .fields as $fields | any($fields[]; .jsonPath == "$[*].avg_days" and .name == "avg_days" and .type == "number") and any($fields[]; .jsonPath == "$[*].avg_hours" and .name == "avg_hours" and .type == "number")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
-    jq -e '.panels[] | select(.title == "Average Time to Publish by API") | .fieldConfig.overrides as $overrides | any($overrides[]; .matcher.options == "avg_days" and any(.properties[]; .id == "unit" and .value == "d") and any(.properties[]; .id == "thresholds" and (.value.steps | any(.value == 1)) and (.value.steps | any(.value == 3)))) and any($overrides[]; .matcher.options == "avg_hours" and any(.properties[]; .id == "unit" and .value == "h") and any(.properties[]; .id == "thresholds" and (.value.steps | any(.value == 24)) and (.value.steps | any(.value == 72))))' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
-    jq -e '.panels[] | select(.title == "Average Draft to Publish by API") | .targets[] | select(.urlPath == "/metrics/average-draft-to-publish-by-api") | .fields as $fields | any($fields[]; .jsonPath == "$[*].avg_days" and .name == "avg_days" and .type == "number") and all($fields[]; .jsonPath != "$[*].sample_count")' grafana/dashboards/microcms-content-ops-analytics.json >/dev/null
+    ./scripts/validate-grafana-dashboard.sh grafana/dashboards/microcms-content-ops-analytics.json
 
 # Run the local equivalent of the GitHub Actions static verification suite.
 check-ci:
@@ -103,14 +96,7 @@ debug-outputs:
 
 # Send a signed sample webhook directly to the local Floci API Gateway URL.
 debug-webhook:
-    payload='{"service":"example-service","api":"blogs","id":"content-id","type":"edit","contents":{"old":{"status":["DRAFT"],"updatedAt":"2026-06-28T12:00:00Z"},"new":{"status":["PUBLISH"],"updatedAt":"2026-06-29T12:00:00Z","publishValue":{"createdAt":"2026-06-27T12:00:00Z","publishedAt":"2026-06-29T12:00:00Z"}}}}'; \
-    secret="${MICROCMS_WEBHOOK_SECRET:-local-webhook-secret}"; \
-    signature="$(printf '%s' "$payload" | openssl dgst -sha256 -hmac "$secret" -binary | xxd -p -c 256)"; \
-    webhook_url="$(tofu -chdir={{local_dir}} output -raw local_webhook_url)"; \
-    curl -i "$webhook_url" \
-      -H "content-type: application/json" \
-      -H "x-microcms-signature: $signature" \
-      --data "$payload"
+    ./scripts/debug-webhook.sh "{{local_dir}}"
     @just debug-parquet-persist
 
 # Persist local Floci S3 Parquet objects to a git-ignored directory.
