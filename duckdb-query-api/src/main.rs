@@ -1,4 +1,4 @@
-use duckdb_query_api::{AppConfig, app};
+use duckdb_query_api::{AppConfig, try_app};
 use tokio::net::TcpListener;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(&bind_addr).await?;
 
     tracing::info!(%bind_addr, "duckdb-query-api listening");
-    axum::serve(listener, app(config)).await?;
+    axum::serve(listener, try_app(config)?).await?;
 
     Ok(())
 }
