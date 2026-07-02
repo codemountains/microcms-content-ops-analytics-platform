@@ -15,7 +15,7 @@ services:
       - "8000:8000"
 
   grafana:
-    image: grafana/grafana:12.2.5
+    image: grafana/grafana:13.0.3
     depends_on:
       - duckdb-query-api
     environment:
