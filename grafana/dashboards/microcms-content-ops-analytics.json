@@ -60,6 +60,7 @@
         }
       ],
       "title": "Calendar Heatmap",
+      "description": "Webhook 受信日（S3 パーティション dt、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（${__from} / ${__to}）で絞り込み、0 件の日も表示します。",
       "type": "tim012432-calendarheatmap-panel"
     },
     {
@@ -139,6 +140,7 @@
         }
       ],
       "title": "API Activity",
+      "description": "API ごとの event_kind 別件数（直近 30 日）。create_draft / create_publish / first_publish / update_publish / unpublish / delete を stacked bar で表示します。",
       "type": "barchart"
     },
     {
@@ -205,6 +207,7 @@
         }
       ],
       "title": "Top Updated Contents",
+      "description": "event_type が new または edit で content_id があるイベントを対象に、更新回数が多いコンテンツ上位 20 件（直近 30 日）を表示します。updated_count は API の count、last_event_at は最終イベント時刻です。",
       "type": "table"
     },
     {
@@ -338,6 +341,7 @@
         }
       ],
       "title": "Average Time to Publish by API",
+      "description": "API ごとに、コンテンツ作成（publishValue.createdAt）から初回公開（publishValue.publishedAt）までの平均所要時間を表示します。CREATE_PUBLISH と FIRST_PUBLISH を対象（直近 30 日）にし、publish_duration_unit で日数 / 時間を切り替えます。",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -481,6 +485,7 @@
         }
       ],
       "title": "Average Draft to Publish by API",
+      "description": "API ごとに、下書き作成（draftValue.createdAt）から初回公開（publishValue.publishedAt）までの平均所要時間を表示します。同一 api / content_id の CREATE_DRAFT と FIRST_PUBLISH を結合し、CREATE_PUBLISH は含めません。期間フィルタは FIRST_PUBLISH 側の dt に適用します（直近 30 日）。",
       "transformations": [
         {
           "id": "filterFieldsByName",

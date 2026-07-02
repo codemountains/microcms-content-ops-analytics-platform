@@ -38,6 +38,14 @@ run_jq "dashboard JSON must be valid" empty
 
 run_jq "dashboard timezone must be Asia/Tokyo" -e '.timezone == "Asia/Tokyo"'
 
+run_jq "all panels must have non-empty descriptions" -e '
+  all(
+    .panels[];
+    (.description | type == "string")
+      and (.description | gsub("\\s"; "") | length > 0)
+  )
+'
+
 run_jq "all panel queries disable JSON datasource cache" -e '
   [.panels[].targets[] | select(.cacheDurationSeconds != 0)] | length == 0
 '
