@@ -56,11 +56,11 @@
             "params": [
               {
                 "key": "from",
-                "value": "${__from}"
+                "value": "${__timeFrom}"
               },
               {
                 "key": "to",
-                "value": "${__to}"
+                "value": "${__timeTo}"
               }
             ],
             "data": ""
@@ -83,7 +83,7 @@
         }
       ],
       "title": "Calendar Heatmap",
-      "description": "Webhook 受信日（S3 パーティション dt、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（${__from} / ${__to}）で絞り込み、0 件の日も表示します。",
+      "description": "Webhook 受信日（S3 パーティション dt、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（${__timeFrom} / ${__timeTo}）で絞り込み、0 件の日も表示します。",
       "type": "tim012432-calendarheatmap-panel"
     },
     {

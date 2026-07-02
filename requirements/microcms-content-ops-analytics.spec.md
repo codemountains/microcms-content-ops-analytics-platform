@@ -213,7 +213,7 @@ Query parameters:
 | `to` | なし | 集計終了時刻（Unix epoch ミリ秒）。`from` とセットで指定する |
 
 `from` / `to` を省略した場合は、直近 365 日を返す。
-Grafana ダッシュボードでは `${__from}` / `${__to}` を渡す。
+Grafana ダッシュボードでは Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` を渡す。
 
 Response example:
 
@@ -605,7 +605,7 @@ Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパ
 
 | パネル | description に含める指標定義 |
 | --- | --- |
-| Calendar Heatmap | Webhook 受信日（S3 パーティション `dt`、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（`${__from}` / `${__to}`）で絞り込み、0 件の日も表示する。 |
+| Calendar Heatmap | Webhook 受信日（S3 パーティション `dt`、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）で絞り込み、0 件の日も表示する。 |
 | API Activity | API ごとの `event_kind` 別件数（直近 30 日）。`create_draft` / `create_publish` / `first_publish` / `update_publish` / `unpublish` / `delete` を stacked bar で表示する。 |
 | Top Updated Contents | `event_type IN ('new', 'edit')` かつ `content_id` があるイベントを対象に、更新回数が多いコンテンツ上位 20 件（直近 30 日）を表示する。`updated_count` は API の `count`、`last_event_at` は最終イベント時刻。 |
 | Average Time to Publish by API | API ごとに、コンテンツ作成（`publishValue.createdAt`）から初回公開（`publishValue.publishedAt`）までの平均所要時間を表示する。`CREATE_PUBLISH` と `FIRST_PUBLISH` を対象（直近 30 日）にし、`publish_duration_unit` で日数 / 時間を切り替える。 |
@@ -613,7 +613,7 @@ Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパ
 
 API Activity は `create_draft_count`、`create_publish_count`、`first_publish_count`、`update_publish_count`、`unpublish_count`、`delete_count` を stacked series として表示する。
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
-ダッシュボードの time range（既定 `now-365d`）を `${__from}` / `${__to}` として API に渡す。
+ダッシュボードの time range（既定 `now-365d`）を Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` として API に渡す。
 ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
 Top Updated Contents は API response の `count` field を Table 上では `updated_count` として表示し、`last_event_at` は field override で `dateTimeAsLocal` 表示とする。
 Average Time to Publish by API は dashboard variable `publish_duration_unit` により `days` / `hours` を切り替え、API には `unit=${publish_duration_unit}` を渡す。

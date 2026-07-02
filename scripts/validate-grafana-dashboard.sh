@@ -99,8 +99,8 @@ run_jq "Calendar Heatmap panel wiring" -e '
   | .targets[]
   | select(.url == "/metrics/calendar-heatmap")
   | select((.url_options.params // []) == [
-      {"key":"from","value":"${__from}"},
-      {"key":"to","value":"${__to}"}
+      {"key":"from","value":"${__timeFrom}"},
+      {"key":"to","value":"${__timeTo}"}
     ])
   | [.columns[] | {selector, text, type}] as $fields
   | all(
