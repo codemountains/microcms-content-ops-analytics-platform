@@ -148,6 +148,9 @@ just debug-parquet-delete
 
 Grafana dashboard の既定 time range（過去 365 日）に合わせ、**10,000 件 / 365 日分**のダミーデータを生成します。layout は partition 単位の batched file（local seed 専用）です。
 
+- Calendar Heatmap: 全カレンダー日の約 32% のみに filler イベントを配置し、残りは 0 件の日を残します
+- Average Time to Publish / Average Draft to Publish: API ごとに異なる日数バラつきを持つ metric lifecycle イベントを先に生成します
+
 ```bash
 just debug-parquet-delete   # 推奨: 既存データを消してから
 just debug-parquet-seed-large

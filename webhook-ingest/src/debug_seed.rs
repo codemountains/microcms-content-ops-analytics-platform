@@ -12,6 +12,10 @@ use crate::{
 const EVENT_PREFIX: &str = "microcms_events";
 const SERVICE_ID: &str = "example-service";
 const BULK_APIS: &[&str] = &["blogs", "authors", "news", "categories", "pages"];
+/// Share of calendar days that receive filler events. Remaining days stay at zero in heatmap.
+const BULK_ACTIVE_DAY_DENSITY: f64 = 0.32;
+const METRIC_CONTENTS_PER_API: u32 = 12;
+const METRIC_PUBLISH_WINDOW_DAYS: i64 = 30;
 const SMOKE_EVENT_IDS: [&str; 7] = [
     "018f1001-0000-7000-8000-000000000001",
     "018f1001-0000-7000-8000-000000000002",
@@ -129,15 +133,26 @@ fn generate_bulk_files(config: &DebugSeedConfig) -> Result<DebugSeedSummary, Ing
     let mut min_dt = None;
     let mut max_dt = None;
 
-    for _ in 0..config.count {
-        let received_at = random_received_at(&mut rng, start_date, config.days);
+    generate_bulk_metric_lifecycle_events(end_date, &mut events, &mut min_dt, &mut max_dt)?;
+
+    let active_days = build_sparse_active_days(&mut rng, start_date, config.days);
+    let filler_count = config.count.saturating_sub(events.len() as u32);
+    for _ in 0..filler_count {
+        let received_at = random_received_at_on_days(&mut rng, &active_days);
         let api = BULK_APIS[rng.next_usize(BULK_APIS.len())];
         let content_id = pick_content_id(&mut rng, config.contents);
         let template = pick_bulk_template(&mut rng);
-        let body = build_bulk_webhook_body(api, &content_id, template, received_at);
-        let event = normalize_payload(body.as_bytes(), received_at)?;
-        track_date(&event, &mut min_dt, &mut max_dt);
-        events.push(event);
+        let timing = BulkEventTiming::for_filler(api, &content_id, template, received_at, &mut rng);
+        push_bulk_event(
+            &mut events,
+            &mut min_dt,
+            &mut max_dt,
+            api,
+            &content_id,
+            template,
+            received_at,
+            &timing,
+        )?;
     }
 
     let mut partitions: BTreeMap<String, Vec<NormalizedEvent>> = BTreeMap::new();
@@ -147,6 +162,7 @@ fn generate_bulk_files(config: &DebugSeedConfig) -> Result<DebugSeedSummary, Ing
     }
 
     let partition_count = partitions.len();
+    let event_count = partitions.values().map(Vec::len).sum();
     let mut file_count = 0;
     for (partition, partition_events) in partitions {
         for (shard, chunk) in partition_events
@@ -162,12 +178,112 @@ fn generate_bulk_files(config: &DebugSeedConfig) -> Result<DebugSeedSummary, Ing
     }
 
     Ok(DebugSeedSummary {
-        event_count: config.count as usize,
+        event_count,
         file_count,
         partition_count,
         min_dt,
         max_dt,
     })
+}
+
+fn generate_bulk_metric_lifecycle_events(
+    end_date: NaiveDate,
+    events: &mut Vec<NormalizedEvent>,
+    min_dt: &mut Option<NaiveDate>,
+    max_dt: &mut Option<NaiveDate>,
+) -> Result<(), IngestError> {
+    let recent_start = end_date - Duration::days(METRIC_PUBLISH_WINDOW_DAYS - 1);
+
+    for api in BULK_APIS {
+        for index in 0..METRIC_CONTENTS_PER_API {
+            let content_id = format!("metric-{api}-{index}");
+            let publish_lead_days = api_publish_lead_days(api, index);
+            let draft_to_publish_days = api_draft_to_publish_days(api, index);
+            let publish_day = recent_start
+                + Duration::days(
+                    (i64::from(index) * METRIC_PUBLISH_WINDOW_DAYS)
+                        / i64::from(METRIC_CONTENTS_PER_API),
+                );
+            let publish_at = jst_datetime(
+                publish_day,
+                NaiveTime::from_hms_opt(10 + (index % 8), (index * 5) % 60, 0).unwrap(),
+            );
+            let content_created_at = publish_at - Duration::days(publish_lead_days);
+            let draft_created_at = publish_at - Duration::days(draft_to_publish_days);
+            let draft_received_at = jst_datetime(
+                jst_date(draft_created_at),
+                NaiveTime::from_hms_opt(9 + (index % 6), 15, 0).unwrap(),
+            );
+
+            push_bulk_event(
+                events,
+                min_dt,
+                max_dt,
+                api,
+                &content_id,
+                BulkTemplate::CreateDraft,
+                draft_received_at,
+                &BulkEventTiming {
+                    draft_created_at: Some(draft_created_at),
+                    content_created_at: None,
+                    content_published_at: None,
+                },
+            )?;
+            push_bulk_event(
+                events,
+                min_dt,
+                max_dt,
+                api,
+                &content_id,
+                BulkTemplate::FirstPublish,
+                publish_at,
+                &BulkEventTiming {
+                    draft_created_at: None,
+                    content_created_at: Some(content_created_at),
+                    content_published_at: Some(publish_at),
+                },
+            )?;
+
+            if index.is_multiple_of(3) {
+                let direct_publish_lead = publish_lead_days + i64::from(index % 4) + 1;
+                let direct_created_at = publish_at - Duration::days(direct_publish_lead);
+                push_bulk_event(
+                    events,
+                    min_dt,
+                    max_dt,
+                    api,
+                    &format!("{content_id}-direct"),
+                    BulkTemplate::CreatePublish,
+                    publish_at + Duration::hours(1),
+                    &BulkEventTiming {
+                        draft_created_at: None,
+                        content_created_at: Some(direct_created_at),
+                        content_published_at: Some(publish_at + Duration::hours(1)),
+                    },
+                )?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_bulk_event(
+    events: &mut Vec<NormalizedEvent>,
+    min_dt: &mut Option<NaiveDate>,
+    max_dt: &mut Option<NaiveDate>,
+    api: &str,
+    content_id: &str,
+    template: BulkTemplate,
+    received_at: DateTime<Utc>,
+    timing: &BulkEventTiming,
+) -> Result<(), IngestError> {
+    let body = build_bulk_webhook_body(api, content_id, template, received_at, timing);
+    let event = normalize_payload(body.as_bytes(), received_at)?;
+    track_date(&event, min_dt, max_dt);
+    events.push(event);
+    Ok(())
 }
 
 fn smoke_fixtures(
@@ -402,6 +518,93 @@ enum BulkTemplate {
     UnclassifiedEdit,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct BulkEventTiming {
+    draft_created_at: Option<DateTime<Utc>>,
+    content_created_at: Option<DateTime<Utc>>,
+    content_published_at: Option<DateTime<Utc>>,
+}
+
+impl BulkEventTiming {
+    fn for_filler(
+        api: &str,
+        content_id: &str,
+        template: BulkTemplate,
+        received_at: DateTime<Utc>,
+        rng: &mut SeededRng,
+    ) -> Self {
+        let content_index = content_id
+            .rsplit('-')
+            .next()
+            .and_then(|value| value.parse::<u32>().ok())
+            .unwrap_or(0);
+        let publish_lead_days =
+            api_publish_lead_days(api, content_index) + i64::from(rng.next_u32(3));
+        let draft_to_publish_days =
+            api_draft_to_publish_days(api, content_index) + i64::from(rng.next_u32(4));
+
+        match template {
+            BulkTemplate::CreateDraft => Self {
+                draft_created_at: Some(received_at - Duration::days(draft_to_publish_days)),
+                content_created_at: None,
+                content_published_at: None,
+            },
+            BulkTemplate::CreatePublish | BulkTemplate::FirstPublish => Self {
+                draft_created_at: None,
+                content_created_at: Some(received_at - Duration::days(publish_lead_days)),
+                content_published_at: Some(received_at),
+            },
+            _ => Self {
+                draft_created_at: None,
+                content_created_at: None,
+                content_published_at: None,
+            },
+        }
+    }
+}
+
+fn api_publish_lead_days(api: &str, index: u32) -> i64 {
+    let base = match api {
+        "blogs" => 1,
+        "authors" => 2,
+        "news" => 4,
+        "categories" => 3,
+        "pages" => 8,
+        _ => 5,
+    };
+    base + i64::from(index % 5)
+}
+
+fn api_draft_to_publish_days(api: &str, index: u32) -> i64 {
+    let base = match api {
+        "blogs" => 4,
+        "authors" => 2,
+        "news" => 10,
+        "categories" => 6,
+        "pages" => 18,
+        _ => 8,
+    };
+    base + i64::from(index % 6)
+}
+
+fn build_sparse_active_days(
+    rng: &mut SeededRng,
+    start_date: NaiveDate,
+    days: u32,
+) -> Vec<NaiveDate> {
+    let mut active_days = Vec::new();
+    for offset in 0..days {
+        let threshold = (BULK_ACTIVE_DAY_DENSITY * u64::MAX as f64) as u64;
+        if rng.next_u64() <= threshold {
+            active_days.push(start_date + Duration::days(i64::from(offset)));
+        }
+    }
+    if active_days.is_empty() {
+        active_days.push(start_date);
+    }
+    active_days
+}
+
 fn pick_bulk_template(rng: &mut SeededRng) -> BulkTemplate {
     const TEMPLATES: [BulkTemplate; 7] = [
         BulkTemplate::CreateDraft,
@@ -420,10 +623,22 @@ fn build_bulk_webhook_body(
     content_id: &str,
     template: BulkTemplate,
     received_at: DateTime<Utc>,
+    timing: &BulkEventTiming,
 ) -> String {
     let timestamp = received_at.to_rfc3339();
     let day_before = (received_at - Duration::days(1)).to_rfc3339();
-    let week_before = (received_at - Duration::days(7)).to_rfc3339();
+    let draft_created_at = timing
+        .draft_created_at
+        .unwrap_or(received_at - Duration::days(7))
+        .to_rfc3339();
+    let content_created_at = timing
+        .content_created_at
+        .unwrap_or(received_at - Duration::days(7))
+        .to_rfc3339();
+    let content_published_at = timing
+        .content_published_at
+        .unwrap_or(received_at)
+        .to_rfc3339();
 
     match template {
         BulkTemplate::CreateDraft => format!(
@@ -437,7 +652,7 @@ fn build_bulk_webhook_body(
                 "new":{{
                   "status":["DRAFT"],
                   "updatedAt":"{timestamp}",
-                  "draftValue":{{"createdAt":"{week_before}"}}
+                  "draftValue":{{"createdAt":"{draft_created_at}"}}
                 }}
               }}
             }}"#
@@ -453,7 +668,7 @@ fn build_bulk_webhook_body(
                 "new":{{
                   "status":["PUBLISH"],
                   "updatedAt":"{timestamp}",
-                  "publishValue":{{"createdAt":"{week_before}","publishedAt":"{timestamp}"}}
+                  "publishValue":{{"createdAt":"{content_created_at}","publishedAt":"{content_published_at}"}}
                 }}
               }}
             }}"#
@@ -469,7 +684,7 @@ fn build_bulk_webhook_body(
                 "new":{{
                   "status":["PUBLISH"],
                   "updatedAt":"{timestamp}",
-                  "publishValue":{{"createdAt":"{week_before}","publishedAt":"{timestamp}"}}
+                  "publishValue":{{"createdAt":"{content_created_at}","publishedAt":"{content_published_at}"}}
                 }}
               }}
             }}"#
@@ -585,9 +800,8 @@ fn jst_offset() -> FixedOffset {
     FixedOffset::east_opt(9 * 60 * 60).expect("valid JST offset")
 }
 
-fn random_received_at(rng: &mut SeededRng, start_date: NaiveDate, days: u32) -> DateTime<Utc> {
-    let day_offset = rng.next_u32(days);
-    let date = start_date + Duration::days(i64::from(day_offset));
+fn random_received_at_on_days(rng: &mut SeededRng, active_days: &[NaiveDate]) -> DateTime<Utc> {
+    let date = active_days[rng.next_usize(active_days.len())];
     let hour = rng.next_u32(24);
     let minute = rng.next_u32(60);
     let second = rng.next_u32(60);
@@ -709,22 +923,22 @@ mod tests {
         let summary = generate_debug_parquet_files(&DebugSeedConfig {
             output_dir: tempdir.path().to_path_buf(),
             preset: DebugSeedPreset::Bulk,
-            count: 50,
-            days: 7,
+            count: 500,
+            days: 90,
             contents: 10,
             rows_per_file: 10,
             seed: 42,
         })
         .unwrap();
 
-        assert_eq!(summary.event_count, 50);
+        assert_eq!(summary.event_count, 500);
         assert!(summary.file_count < summary.event_count);
         assert!(summary.partition_count > 1);
         let span = summary
             .max_dt
             .unwrap()
             .signed_duration_since(summary.min_dt.unwrap());
-        assert!(span.num_days() <= 6);
+        assert!(span.num_days() <= 89);
 
         let parquet_files = walk_parquet_files(tempdir.path());
         assert_eq!(parquet_files.len(), summary.file_count);
@@ -739,6 +953,99 @@ mod tests {
             .find(|path| read_parquet_row_count(path, 1) > 1)
             .cloned();
         assert!(multi_row.is_some());
+    }
+
+    #[test]
+    fn bulk_seed_uses_sparse_calendar_days() {
+        let tempdir = tempdir().unwrap();
+        let summary = generate_debug_parquet_files(&DebugSeedConfig {
+            output_dir: tempdir.path().to_path_buf(),
+            preset: DebugSeedPreset::Bulk,
+            count: 2_000,
+            days: 90,
+            contents: 20,
+            rows_per_file: 100,
+            seed: 42,
+        })
+        .unwrap();
+
+        assert_eq!(summary.event_count, 2_000);
+        let unique_days = count_unique_partition_dates(tempdir.path());
+        assert!(
+            unique_days < 70,
+            "expected sparse heatmap days, got {unique_days}"
+        );
+        assert!(unique_days > 20);
+    }
+
+    #[test]
+    fn metric_lifecycle_events_vary_publish_and_draft_durations_by_api() {
+        let mut events = Vec::new();
+        generate_bulk_metric_lifecycle_events(jst_today(), &mut events, &mut None, &mut None)
+            .unwrap();
+
+        let blogs_lead = publish_lead_days_for_api(&events, "blogs");
+        let pages_lead = publish_lead_days_for_api(&events, "pages");
+        assert!(blogs_lead < pages_lead);
+
+        let blogs_draft_lead = draft_to_publish_days_for_api(&events, "blogs");
+        let pages_draft_lead = draft_to_publish_days_for_api(&events, "pages");
+        assert!(blogs_draft_lead < pages_draft_lead);
+    }
+
+    #[test]
+    fn build_sparse_active_days_covers_fraction_of_range() {
+        let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let active_days = build_sparse_active_days(&mut SeededRng::new(42), start, 90);
+        assert!(active_days.len() < 60);
+        assert!(active_days.len() > 15);
+    }
+
+    fn publish_lead_days_for_api(events: &[NormalizedEvent], api: &str) -> i64 {
+        let event = events
+            .iter()
+            .find(|event| {
+                event.api.as_deref() == Some(api)
+                    && matches!(
+                        event.event_kind.as_deref(),
+                        Some("FIRST_PUBLISH") | Some("CREATE_PUBLISH")
+                    )
+                    && event.content_created_at.is_some()
+                    && event.content_published_at.is_some()
+            })
+            .expect("publish event");
+        (event.content_published_at.unwrap() - event.content_created_at.unwrap()).num_days()
+    }
+
+    fn draft_to_publish_days_for_api(events: &[NormalizedEvent], api: &str) -> i64 {
+        let content_id = format!("metric-{api}-0");
+        let draft = events
+            .iter()
+            .find(|event| {
+                event.content_id.as_deref() == Some(content_id.as_str())
+                    && event.event_kind.as_deref() == Some("CREATE_DRAFT")
+            })
+            .expect("draft event");
+        let publish = events
+            .iter()
+            .find(|event| {
+                event.content_id.as_deref() == Some(content_id.as_str())
+                    && event.event_kind.as_deref() == Some("FIRST_PUBLISH")
+            })
+            .expect("publish event");
+        (publish.content_published_at.unwrap() - draft.draft_created_at.unwrap()).num_days()
+    }
+
+    fn count_unique_partition_dates(root: &Path) -> usize {
+        let mut dates = BTreeMap::new();
+        for path in walk_parquet_files(root) {
+            if let Some(rest) = path.to_string_lossy().split("/dt=").nth(1)
+                && let Some(date) = rest.split('/').next()
+            {
+                dates.insert(date.to_owned(), ());
+            }
+        }
+        dates.len()
     }
 
     fn walk_parquet_files(root: &Path) -> Vec<PathBuf> {
