@@ -233,10 +233,28 @@ mod tests {
                 "edit",
                 Some(r#"["PUBLISH"]"#),
                 Some(r#"["DRAFT"]"#),
-                Some("UNPUBLISH"),
+                Some("UNPUBLISH_TO_DRAFT"),
+            ),
+            (
+                "edit",
+                Some(r#"["PUBLISH"]"#),
+                Some(r#"["CLOSED"]"#),
+                Some("UNPUBLISH_TO_CLOSED"),
             ),
             ("delete", Some(r#"["PUBLISH"]"#), None, Some("DELETE")),
             ("edit", Some(r#"["DRAFT"]"#), Some(r#"["DRAFT"]"#), None),
+            (
+                "edit",
+                Some(r#"["PUBLISH"]"#),
+                Some(r#"["DRAFT","CLOSED"]"#),
+                None,
+            ),
+            (
+                "edit",
+                Some(r#"["PUBLISH"]"#),
+                Some(r#"["ARCHIVED"]"#),
+                None,
+            ),
         ];
 
         for (event_type, old_status, new_status, expected) in cases {

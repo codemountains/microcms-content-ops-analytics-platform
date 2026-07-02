@@ -19,15 +19,17 @@ const API_ACTIVITY_WEIGHT_CREATE_DRAFT: u32 = 30;
 const API_ACTIVITY_WEIGHT_CREATE_PUBLISH: u32 = 15;
 const API_ACTIVITY_WEIGHT_FIRST_PUBLISH: u32 = 20;
 const API_ACTIVITY_WEIGHT_UPDATE_PUBLISH: u32 = 25;
-const API_ACTIVITY_WEIGHT_UNPUBLISH: u32 = 7;
+const API_ACTIVITY_WEIGHT_UNPUBLISH_TO_DRAFT: u32 = 5;
+const API_ACTIVITY_WEIGHT_UNPUBLISH_TO_CLOSED: u32 = 2;
 const API_ACTIVITY_WEIGHT_DELETE: u32 = 3;
 const API_ACTIVITY_WEIGHT_TOTAL: u32 = API_ACTIVITY_WEIGHT_CREATE_DRAFT
     + API_ACTIVITY_WEIGHT_CREATE_PUBLISH
     + API_ACTIVITY_WEIGHT_FIRST_PUBLISH
     + API_ACTIVITY_WEIGHT_UPDATE_PUBLISH
-    + API_ACTIVITY_WEIGHT_UNPUBLISH
+    + API_ACTIVITY_WEIGHT_UNPUBLISH_TO_DRAFT
+    + API_ACTIVITY_WEIGHT_UNPUBLISH_TO_CLOSED
     + API_ACTIVITY_WEIGHT_DELETE;
-const SMOKE_EVENT_IDS: [&str; 7] = [
+const SMOKE_EVENT_IDS: [&str; 8] = [
     "018f1001-0000-7000-8000-000000000001",
     "018f1001-0000-7000-8000-000000000002",
     "018f1001-0000-7000-8000-000000000003",
@@ -35,6 +37,7 @@ const SMOKE_EVENT_IDS: [&str; 7] = [
     "018f1001-0000-7000-8000-000000000005",
     "018f1001-0000-7000-8000-000000000006",
     "018f1001-0000-7000-8000-000000000007",
+    "018f1001-0000-7000-8000-000000000008",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,8 +140,8 @@ fn generate_smoke_files(config: &DebugSeedConfig) -> Result<DebugSeedSummary, In
     }
 
     Ok(DebugSeedSummary {
-        event_count: 7,
-        file_count: 7,
+        event_count: 8,
+        file_count: 8,
         partition_count: partitions.len(),
         min_dt,
         max_dt,
@@ -203,7 +206,8 @@ struct ActivityTargets {
     create_publish: u32,
     first_publish: u32,
     update_publish: u32,
-    unpublish: u32,
+    unpublish_to_draft: u32,
+    unpublish_to_closed: u32,
     delete: u32,
 }
 
@@ -213,7 +217,8 @@ impl ActivityTargets {
             + self.create_publish
             + self.first_publish
             + self.update_publish
-            + self.unpublish
+            + self.unpublish_to_draft
+            + self.unpublish_to_closed
             + self.delete
     }
 }
@@ -224,24 +229,26 @@ fn compute_activity_targets(total: u32) -> ActivityTargets {
         API_ACTIVITY_WEIGHT_CREATE_PUBLISH,
         API_ACTIVITY_WEIGHT_FIRST_PUBLISH,
         API_ACTIVITY_WEIGHT_UPDATE_PUBLISH,
-        API_ACTIVITY_WEIGHT_UNPUBLISH,
+        API_ACTIVITY_WEIGHT_UNPUBLISH_TO_DRAFT,
+        API_ACTIVITY_WEIGHT_UNPUBLISH_TO_CLOSED,
         API_ACTIVITY_WEIGHT_DELETE,
     ];
-    let mut counts = [0_u32; 6];
+    let mut counts = [0_u32; 7];
     let mut assigned = 0_u32;
     for (index, weight) in weights.into_iter().enumerate() {
         counts[index] = total * weight / API_ACTIVITY_WEIGHT_TOTAL;
         assigned += counts[index];
     }
-    counts[5] += total.saturating_sub(assigned);
+    counts[6] += total.saturating_sub(assigned);
 
     ActivityTargets {
         create_draft: counts[0],
         create_publish: counts[1],
         first_publish: counts[2],
         update_publish: counts[3],
-        unpublish: counts[4],
-        delete: counts[5],
+        unpublish_to_draft: counts[4],
+        unpublish_to_closed: counts[5],
+        delete: counts[6],
     }
 }
 
@@ -354,15 +361,23 @@ fn generate_bulk_activity_events(
         )?;
     }
 
-    let mut filler_templates =
-        Vec::with_capacity((targets.update_publish + targets.unpublish + targets.delete) as usize);
+    let mut filler_templates = Vec::with_capacity(
+        (targets.update_publish
+            + targets.unpublish_to_draft
+            + targets.unpublish_to_closed
+            + targets.delete) as usize,
+    );
     filler_templates.extend(std::iter::repeat_n(
         BulkTemplate::UpdatePublish,
         targets.update_publish as usize,
     ));
     filler_templates.extend(std::iter::repeat_n(
-        BulkTemplate::Unpublish,
-        targets.unpublish as usize,
+        BulkTemplate::UnpublishToDraft,
+        targets.unpublish_to_draft as usize,
+    ));
+    filler_templates.extend(std::iter::repeat_n(
+        BulkTemplate::UnpublishToClosed,
+        targets.unpublish_to_closed as usize,
     ));
     filler_templates.extend(std::iter::repeat_n(
         BulkTemplate::Delete,
@@ -507,6 +522,25 @@ fn smoke_fixtures(
             "blogs",
             None,
             "edit",
+            Some("PUBLISH"),
+            Some("CLOSED"),
+            jst_datetime(event_date, NaiveTime::from_hms_opt(15, 30, 0).unwrap()),
+            Some(jst_datetime(
+                event_date,
+                NaiveTime::from_hms_opt(14, 30, 0).unwrap(),
+            )),
+            Some(jst_datetime(
+                event_date,
+                NaiveTime::from_hms_opt(15, 30, 0).unwrap(),
+            )),
+            None,
+            None,
+            None,
+        ),
+        smoke_fixture(
+            "blogs",
+            None,
+            "edit",
             Some("DRAFT"),
             Some("DRAFT"),
             jst_datetime(event_date, NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
@@ -641,7 +675,8 @@ enum BulkTemplate {
     CreatePublish,
     FirstPublish,
     UpdatePublish,
-    Unpublish,
+    UnpublishToDraft,
+    UnpublishToClosed,
     Delete,
 }
 
@@ -704,7 +739,7 @@ fn build_sparse_active_days(
     active_days
 }
 
-/// Filler templates are limited to UPDATE_PUBLISH / UNPUBLISH / DELETE so Grafana
+/// Filler templates are limited to UPDATE_PUBLISH / unpublish variants / DELETE so Grafana
 /// publish-duration metrics stay driven by coordinated metric-lifecycle pairs only.
 fn build_bulk_webhook_body(
     api: &str,
@@ -789,7 +824,7 @@ fn build_bulk_webhook_body(
               }}
             }}"#
         ),
-        BulkTemplate::Unpublish => format!(
+        BulkTemplate::UnpublishToDraft => format!(
             r#"{{
               "service":"{SERVICE_ID}",
               "api":"{api}",
@@ -797,7 +832,31 @@ fn build_bulk_webhook_body(
               "type":"edit",
               "contents":{{
                 "old":{{"status":["PUBLISH"],"updatedAt":"{day_before}"}},
-                "new":{{"status":["DRAFT"],"updatedAt":"{timestamp}"}}
+                "new":{{
+                  "status":["DRAFT"],
+                  "updatedAt":"{timestamp}",
+                  "draftKey":"debug-draft-key",
+                  "publishValue":null,
+                  "draftValue":{{"createdAt":"{draft_created_at}"}}
+                }}
+              }}
+            }}"#
+        ),
+        BulkTemplate::UnpublishToClosed => format!(
+            r#"{{
+              "service":"{SERVICE_ID}",
+              "api":"{api}",
+              "id":"{content_id}",
+              "type":"edit",
+              "contents":{{
+                "old":{{"status":["PUBLISH"],"updatedAt":"{day_before}"}},
+                "new":{{
+                  "status":["CLOSED"],
+                  "updatedAt":"{timestamp}",
+                  "draftKey":null,
+                  "publishValue":null,
+                  "draftValue":null
+                }}
               }}
             }}"#
         ),
@@ -945,14 +1004,14 @@ mod tests {
         })
         .unwrap();
 
-        assert_eq!(summary.event_count, 7);
-        assert_eq!(summary.file_count, 7);
+        assert_eq!(summary.event_count, 8);
+        assert_eq!(summary.file_count, 8);
         assert!(summary.partition_count >= 2);
         assert!(summary.min_dt.is_some());
         assert!(summary.max_dt.is_some());
 
         let parquet_files: Vec<_> = walk_parquet_files(tempdir.path());
-        assert_eq!(parquet_files.len(), 7);
+        assert_eq!(parquet_files.len(), 8);
         for path in &parquet_files {
             let key = path.strip_prefix(tempdir.path()).unwrap().to_string_lossy();
             assert!(key.contains("/service=example-service/"));
@@ -986,11 +1045,14 @@ mod tests {
 
         assert_eq!(events[3].content_id, None);
         assert_eq!(events[4].content_id, None);
-        assert_eq!(events[6].content_id, None);
+        assert_eq!(events[5].content_id, None);
+        assert_eq!(events[7].content_id, None);
         assert_eq!(events[0].content_id.as_deref(), Some("content-1"));
-        assert_eq!(events[5].content_id.as_deref(), Some("content-2"));
+        assert_eq!(events[6].content_id.as_deref(), Some("content-2"));
         assert_eq!(events[0].event_kind.as_deref(), Some("FIRST_PUBLISH"));
-        assert_eq!(events[6].event_kind.as_deref(), Some("DELETE"));
+        assert_eq!(events[3].event_kind.as_deref(), Some("UNPUBLISH_TO_DRAFT"));
+        assert_eq!(events[4].event_kind.as_deref(), Some("UNPUBLISH_TO_CLOSED"));
+        assert_eq!(events[7].event_kind.as_deref(), Some("DELETE"));
         assert_eq!(received_at, events[0].received_at);
     }
 
@@ -1063,7 +1125,8 @@ mod tests {
         assert_eq!(targets.create_publish, 1_500);
         assert_eq!(targets.first_publish, 2_000);
         assert_eq!(targets.update_publish, 2_500);
-        assert_eq!(targets.unpublish, 700);
+        assert_eq!(targets.unpublish_to_draft, 500);
+        assert_eq!(targets.unpublish_to_closed, 200);
         assert_eq!(targets.delete, 300);
     }
 
@@ -1105,7 +1168,7 @@ mod tests {
         .unwrap();
 
         assert!(!stale_path.exists());
-        assert_eq!(walk_parquet_files(tempdir.path()).len(), 7);
+        assert_eq!(walk_parquet_files(tempdir.path()).len(), 8);
     }
 
     #[test]
@@ -1159,6 +1222,27 @@ mod tests {
         assert_eq!(
             filler_lifecycle_kinds, 0,
             "filler must not emit publish lifecycle events that skew Grafana metrics"
+        );
+    }
+
+    #[test]
+    fn bulk_seed_generates_both_unpublish_variants() {
+        let events = generate_test_bulk_events(10_000);
+
+        assert!(
+            events
+                .iter()
+                .any(|event| event.event_kind.as_deref() == Some("UNPUBLISH_TO_DRAFT"))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| event.event_kind.as_deref() == Some("UNPUBLISH_TO_CLOSED"))
+        );
+        assert!(
+            events
+                .iter()
+                .all(|event| event.event_kind.as_deref() != Some("UNPUBLISH"))
         );
     }
 

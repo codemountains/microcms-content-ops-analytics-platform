@@ -13,7 +13,8 @@ pub(crate) fn query_api_activity_rows(
     let create_publish = event_kind::CREATE_PUBLISH;
     let first_publish = event_kind::FIRST_PUBLISH;
     let update_publish = event_kind::UPDATE_PUBLISH;
-    let unpublish = event_kind::UNPUBLISH;
+    let unpublish_to_draft = event_kind::UNPUBLISH_TO_DRAFT;
+    let unpublish_to_closed = event_kind::UNPUBLISH_TO_CLOSED;
     let delete = event_kind::DELETE;
     let sql = format!(
         r#"
@@ -23,7 +24,8 @@ pub(crate) fn query_api_activity_rows(
           SUM(CASE WHEN event_kind = '{create_publish}' THEN 1 ELSE 0 END) AS create_publish_count,
           SUM(CASE WHEN event_kind = '{first_publish}' THEN 1 ELSE 0 END) AS first_publish_count,
           SUM(CASE WHEN event_kind = '{update_publish}' THEN 1 ELSE 0 END) AS update_publish_count,
-          SUM(CASE WHEN event_kind = '{unpublish}' THEN 1 ELSE 0 END) AS unpublish_count,
+          SUM(CASE WHEN event_kind = '{unpublish_to_draft}' THEN 1 ELSE 0 END) AS unpublish_to_draft_count,
+          SUM(CASE WHEN event_kind = '{unpublish_to_closed}' THEN 1 ELSE 0 END) AS unpublish_to_closed_count,
           SUM(CASE WHEN event_kind = '{delete}' THEN 1 ELSE 0 END) AS delete_count,
           COUNT(*) AS total_count
         FROM {events_sql}
@@ -41,9 +43,10 @@ pub(crate) fn query_api_activity_rows(
             create_publish_count: row.get(2)?,
             first_publish_count: row.get(3)?,
             update_publish_count: row.get(4)?,
-            unpublish_count: row.get(5)?,
-            delete_count: row.get(6)?,
-            total_count: row.get(7)?,
+            unpublish_to_draft_count: row.get(5)?,
+            unpublish_to_closed_count: row.get(6)?,
+            delete_count: row.get(7)?,
+            total_count: row.get(8)?,
         })
     })?;
     collect_rows(rows)
