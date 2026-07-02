@@ -3,7 +3,7 @@ apiVersion: 1
 datasources:
   - name: DuckDB Query API
     uid: duckdb-query-api
-    type: marcusolsson-json-datasource
+    type: yesoreyeram-infinity-datasource
     access: proxy
     url: http://duckdb-query-api:8000
     isDefault: true

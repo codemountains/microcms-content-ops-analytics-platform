@@ -198,7 +198,7 @@ AWS 認証情報はローカルの credential chain を利用します。
 | --- | --- |
 | `webhook-ingest` | Lambda 用の Webhook ingest。署名検証、payload 正規化、Parquet 生成、S3 保存を行います |
 | `duckdb-query-api` | Axum ベースの固定メトリクス API。DuckDB `read_parquet()` で S3/ローカル Parquet を集計します |
-| `grafana` | JSON API datasource と初期 dashboard provisioning |
+| `grafana` | Infinity datasource と初期 dashboard provisioning |
 | `docker-compose.yml` | `duckdb-query-api` と Grafana のローカル起動構成 |
 
 ## 環境変数
