@@ -2,7 +2,7 @@ use std::io::Cursor;
 use std::sync::{Arc, LazyLock};
 
 use arrow_array::{
-    ArrayRef, RecordBatch,
+    RecordBatch,
     builder::{StringBuilder, TimestampMicrosecondBuilder},
 };
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
@@ -56,34 +56,87 @@ static EVENT_SCHEMA: LazyLock<Arc<Schema>> = LazyLock::new(|| {
 });
 
 pub fn event_to_parquet(event: &NormalizedEvent) -> Result<Vec<u8>, IngestError> {
+    events_to_parquet(std::slice::from_ref(event))
+}
+
+pub fn events_to_parquet(events: &[NormalizedEvent]) -> Result<Vec<u8>, IngestError> {
+    if events.is_empty() {
+        return Err(IngestError::Parquet("no events to write".to_owned()));
+    }
+
     let schema = Arc::clone(&*EVENT_SCHEMA);
-    let batch = RecordBatch::try_new(
-        Arc::clone(&schema),
+    let batch = events_record_batch(&schema, events)?;
+    write_record_batch(schema, &batch)
+}
+
+fn events_record_batch(
+    schema: &Arc<Schema>,
+    events: &[NormalizedEvent],
+) -> Result<RecordBatch, IngestError> {
+    let len = events.len();
+    let mut received_at = TimestampMicrosecondBuilder::with_capacity(len).with_timezone("UTC");
+    let mut service = StringBuilder::with_capacity(len, len * 16);
+    let mut api = StringBuilder::with_capacity(len, len * 8);
+    let mut content_id = StringBuilder::with_capacity(len, len * 12);
+    let mut event_type = StringBuilder::with_capacity(len, len * 8);
+    let mut event_kind = StringBuilder::with_capacity(len, len * 16);
+    let mut old_status = StringBuilder::with_capacity(len, len * 8);
+    let mut new_status = StringBuilder::with_capacity(len, len * 8);
+    let mut old_updated_at = TimestampMicrosecondBuilder::with_capacity(len).with_timezone("UTC");
+    let mut new_updated_at = TimestampMicrosecondBuilder::with_capacity(len).with_timezone("UTC");
+    let mut draft_created_at = TimestampMicrosecondBuilder::with_capacity(len).with_timezone("UTC");
+    let mut content_created_at =
+        TimestampMicrosecondBuilder::with_capacity(len).with_timezone("UTC");
+    let mut content_published_at =
+        TimestampMicrosecondBuilder::with_capacity(len).with_timezone("UTC");
+    let mut raw_payload = StringBuilder::with_capacity(len, len * 32);
+
+    for event in events {
+        received_at.append_value(event.received_at.timestamp_micros());
+        append_optional_string(&mut service, event.service.as_deref());
+        append_optional_string(&mut api, event.api.as_deref());
+        append_optional_string(&mut content_id, event.content_id.as_deref());
+        append_optional_string(&mut event_type, event.event_type.as_deref());
+        append_optional_string(&mut event_kind, event.event_kind.as_deref());
+        append_optional_string(&mut old_status, event.old_status.as_deref());
+        append_optional_string(&mut new_status, event.new_status.as_deref());
+        append_optional_timestamp(&mut old_updated_at, event.old_updated_at);
+        append_optional_timestamp(&mut new_updated_at, event.new_updated_at);
+        append_optional_timestamp(&mut draft_created_at, event.draft_created_at);
+        append_optional_timestamp(&mut content_created_at, event.content_created_at);
+        append_optional_timestamp(&mut content_published_at, event.content_published_at);
+        raw_payload.append_value(&event.raw_payload);
+    }
+
+    RecordBatch::try_new(
+        Arc::clone(schema),
         vec![
-            timestamp_required(event.received_at),
-            string_optional(event.service.as_deref()),
-            string_optional(event.api.as_deref()),
-            string_optional(event.content_id.as_deref()),
-            string_optional(event.event_type.as_deref()),
-            string_optional(event.event_kind.as_deref()),
-            string_optional(event.old_status.as_deref()),
-            string_optional(event.new_status.as_deref()),
-            timestamp_optional(event.old_updated_at),
-            timestamp_optional(event.new_updated_at),
-            timestamp_optional(event.draft_created_at),
-            timestamp_optional(event.content_created_at),
-            timestamp_optional(event.content_published_at),
-            string_required(&event.raw_payload),
+            Arc::new(received_at.finish()),
+            Arc::new(service.finish()),
+            Arc::new(api.finish()),
+            Arc::new(content_id.finish()),
+            Arc::new(event_type.finish()),
+            Arc::new(event_kind.finish()),
+            Arc::new(old_status.finish()),
+            Arc::new(new_status.finish()),
+            Arc::new(old_updated_at.finish()),
+            Arc::new(new_updated_at.finish()),
+            Arc::new(draft_created_at.finish()),
+            Arc::new(content_created_at.finish()),
+            Arc::new(content_published_at.finish()),
+            Arc::new(raw_payload.finish()),
         ],
     )
-    .map_err(|error| IngestError::Parquet(error.to_string()))?;
+    .map_err(|error| IngestError::Parquet(error.to_string()))
+}
 
+fn write_record_batch(schema: Arc<Schema>, batch: &RecordBatch) -> Result<Vec<u8>, IngestError> {
     let mut buffer = Cursor::new(Vec::new());
     let props = WriterProperties::builder().build();
     let mut writer = ArrowWriter::try_new(&mut buffer, schema, Some(props))
         .map_err(|error| IngestError::Parquet(error.to_string()))?;
     writer
-        .write(&batch)
+        .write(batch)
         .map_err(|error| IngestError::Parquet(error.to_string()))?;
     writer
         .close()
@@ -92,34 +145,21 @@ pub fn event_to_parquet(event: &NormalizedEvent) -> Result<Vec<u8>, IngestError>
     Ok(buffer.into_inner())
 }
 
-fn string_required(value: &str) -> ArrayRef {
-    let mut builder = StringBuilder::with_capacity(1, value.len());
-    builder.append_value(value);
-    Arc::new(builder.finish())
-}
-
-fn string_optional(value: Option<&str>) -> ArrayRef {
-    let mut builder = StringBuilder::with_capacity(1, value.map(str::len).unwrap_or_default());
+fn append_optional_string(builder: &mut StringBuilder, value: Option<&str>) {
     match value {
         Some(value) => builder.append_value(value),
         None => builder.append_null(),
     }
-    Arc::new(builder.finish())
 }
 
-fn timestamp_required(value: DateTime<Utc>) -> ArrayRef {
-    let mut builder = TimestampMicrosecondBuilder::with_capacity(1).with_timezone("UTC");
-    builder.append_value(value.timestamp_micros());
-    Arc::new(builder.finish())
-}
-
-fn timestamp_optional(value: Option<DateTime<Utc>>) -> ArrayRef {
-    let mut builder = TimestampMicrosecondBuilder::with_capacity(1).with_timezone("UTC");
+fn append_optional_timestamp(
+    builder: &mut TimestampMicrosecondBuilder,
+    value: Option<DateTime<Utc>>,
+) {
     match value {
         Some(value) => builder.append_value(value.timestamp_micros()),
         None => builder.append_null(),
     }
-    Arc::new(builder.finish())
 }
 
 #[cfg(test)]
@@ -193,5 +233,21 @@ mod tests {
                 .any(|field| field.name() == "draft_created_at")
         );
         assert_eq!(batch.num_rows(), 1);
+    }
+
+    #[test]
+    fn writes_multiple_events_to_single_parquet_file() {
+        let received_at = DateTime::parse_from_rfc3339("2026-06-29T01:02:03Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let first = normalize_payload(sample_body(), received_at).unwrap();
+        let second = normalize_payload(sample_body(), received_at).unwrap();
+        let parquet = events_to_parquet(&[first, second]).unwrap();
+
+        let builder = ParquetRecordBatchReaderBuilder::try_new(Bytes::from(parquet)).unwrap();
+        let mut reader = builder.build().unwrap();
+        let batch = reader.next().unwrap().unwrap();
+        assert_eq!(batch.num_rows(), 2);
+        assert!(reader.next().is_none());
     }
 }

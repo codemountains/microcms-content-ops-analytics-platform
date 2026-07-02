@@ -126,14 +126,41 @@ just debug-webhook
 
 成功時は `{"ok":true,"s3_key":"..."}` が返ります。
 
-## 7. S3 Parquet を確認する
+## 7. ダミー Parquet を生成して投入する
+
+microCMS Webhook を送らずに、手元で Parquet を生成して Floci S3 に投入できます。
+
+### 少量（smoke）
+
+動作確認用に 7 件の固定 fixture を生成します。layout は本番 ingest と同じ **1 event = 1 file** です。
+
+```bash
+just debug-parquet-seed
+```
+
+### 1 年分（bulk）
+
+Grafana dashboard の既定 time range（過去 365 日）に合わせ、**10,000 件 / 365 日分**のダミーデータを生成します。layout は partition 単位の batched file（local seed 専用）です。
+
+```bash
+just debug-parquet-delete   # 推奨: 既存データを消してから
+just debug-parquet-seed-large
+```
+
+件数や期間を変える場合:
+
+```bash
+DEBUG_SEED_COUNT=50000 DEBUG_SEED_DAYS=365 just debug-parquet-seed-large
+```
+
+## 8. S3 Parquet を確認する
 
 ```bash
 just debug-s3-ls
 ```
 
 `.parquet` ファイルが作成されていれば `webhook-ingest` の保存処理は成功です。
-まだ `just debug-webhook` を実行していない場合は、`No objects found under ...` と表示されます。
+まだ `just debug-webhook` や `just debug-parquet-seed` を実行していない場合は、`No objects found under ...` と表示されます。
 
 `just debug-webhook` は送信後に Floci S3 の `.parquet` ファイルを `.debug/parquet/microcms_events/` に同期します。
 手動で同期したい場合は次を実行します。
@@ -155,7 +182,7 @@ debug で生成した Parquet を削除する場合は次を実行します。
 just debug-parquet-delete
 ```
 
-## 8. Query API と Grafana を確認する
+## 9. Query API と Grafana を確認する
 
 ```bash
 just debug-metrics
@@ -167,7 +194,7 @@ Grafana:
 http://localhost:3000
 ```
 
-## 9. 停止と削除
+## 10. 停止と削除
 
 OpenTofu 管理リソースを削除します。
 
@@ -190,4 +217,4 @@ just debug-down
 - Query API が S3 を読めない: `DUCKDB_S3_ENDPOINT=floci:4566`, `DUCKDB_S3_URL_STYLE=path`, `DUCKDB_S3_USE_SSL=false` が `duckdb-query-api` に渡っているか確認します。
 - Floci の起動に `Bind for 0.0.0.0:4566 failed: port is already allocated` が出る: `FLOCI_PORT=4567 just debug` のようにホスト側 port を変更します。
 - `duckdb-query-api` の Docker build で `cannot allocate memory` が出る: `.env` または実行時の `CARGO_BUILD_JOBS=1` を確認し、Docker Desktop の Memory 上限を増やしてから再実行します。途中で失敗した build cache が残っている場合は、再実行前に Docker Desktop 側で停止中の build がないことも確認します。
-- Floci 上の S3 が空: まず `just debug-webhook` でサンプルイベントを送信します。直接確認する場合は `aws s3api list-objects-v2 --endpoint-url=http://localhost:${FLOCI_PORT:-4566} --bucket "$BUCKET" --prefix microcms_events/` で endpoint を明示します。
+- Floci 上の S3 が空: まず `just debug-webhook` または `just debug-parquet-seed` / `just debug-parquet-seed-large` でサンプルイベントを投入します。直接確認する場合は `aws s3api list-objects-v2 --endpoint-url=http://localhost:${FLOCI_PORT:-4566} --bucket "$BUCKET" --prefix microcms_events/` で endpoint を明示します。
