@@ -258,6 +258,11 @@ mod tests {
         assert_eq!(top_contents[0].api.as_deref(), Some("blogs"));
         assert_eq!(top_contents[0].content_id.as_deref(), Some("content-1"));
         assert_eq!(top_contents[0].count, 3);
+        let expected_last_event_at = format!("{event_date}T13:00:00Z");
+        assert_eq!(
+            top_contents[0].last_event_at.as_deref(),
+            Some(expected_last_event_at.as_str())
+        );
 
         assert_eq!(publish_duration.len(), 1);
         assert_eq!(publish_duration[0].api.as_deref(), Some("blogs"));

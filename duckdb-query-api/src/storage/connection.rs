@@ -16,6 +16,7 @@ pub(super) fn configure_connection(
         "SET extension_directory = '{}';",
         sql_string_literal(extension_directory)
     ))?;
+    connection.execute_batch("SET TimeZone = 'UTC';")?;
 
     if events_path.starts_with("s3://") {
         connection.execute_batch(
@@ -124,6 +125,28 @@ mod tests {
             normalize_duckdb_s3_endpoint("https://localhost:4566"),
             "localhost:4566"
         );
+    }
+
+    #[test]
+    fn configures_connection_timezone_to_utc() {
+        let connection = Connection::open_in_memory().unwrap();
+
+        configure_connection(
+            &connection,
+            "ap-northeast-1",
+            "/tmp/events/**/*.parquet",
+            "/tmp/duckdb_extensions",
+            None,
+            "vhost",
+            true,
+        )
+        .unwrap();
+
+        let timezone: String = connection
+            .query_row("SELECT current_setting('TimeZone')", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(timezone, "UTC");
     }
 
     #[test]

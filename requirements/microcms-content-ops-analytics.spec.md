@@ -497,7 +497,7 @@ SELECT
   api,
   content_id,
   COUNT(*) AS count,
-  MAX(received_at) AS last_event_at
+  strftime(MAX(received_at), '%Y-%m-%dT%H:%M:%SZ') AS last_event_at
 FROM read_parquet(
   '<EVENTS_PATH>',
   hive_partitioning = true,
@@ -508,7 +508,7 @@ WHERE
   AND event_type IN ('new', 'edit')
   AND content_id IS NOT NULL
 GROUP BY api, content_id
-ORDER BY count DESC, last_event_at DESC
+ORDER BY count DESC, MAX(received_at) DESC
 LIMIT 20;
 ```
 
