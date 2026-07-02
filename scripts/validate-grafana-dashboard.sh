@@ -133,6 +133,26 @@ run_jq "API Activity field mappings" -e '
     )
 '
 
+run_jq "API Activity series order transformation" -e '
+  .panels[]
+  | select(.title == "API Activity")
+  | .transformations
+  | index([{
+      "id": "organize",
+      "options": {
+        "indexByName": {
+          "api": 0,
+          "create_draft": 1,
+          "create_publish": 2,
+          "first_publish": 3,
+          "update_publish": 4,
+          "unpublish": 5,
+          "delete": 6
+        }
+      }
+    }])
+'
+
 run_jq "Top Updated Contents count field mapping" -e '
   .panels[]
   | select(.title == "Top Updated Contents")
