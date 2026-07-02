@@ -19,7 +19,7 @@ services:
     depends_on:
       - duckdb-query-api
     environment:
-      GF_INSTALL_PLUGINS: marcusolsson-json-datasource,tim012432-calendarheatmap-panel
+      GF_INSTALL_PLUGINS: yesoreyeram-infinity-datasource,tim012432-calendarheatmap-panel
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_USERS_DEFAULT_THEME: light

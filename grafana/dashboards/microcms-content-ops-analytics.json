@@ -10,7 +10,7 @@
   "panels": [
     {
       "datasource": {
-        "type": "marcusolsson-json-datasource",
+        "type": "yesoreyeram-infinity-datasource",
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
@@ -40,23 +40,46 @@
       },
       "targets": [
         {
-          "cacheDurationSeconds": 0,
-          "fields": [
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "duckdb-query-api"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "root_selector": "$",
+          "url": "/metrics/calendar-heatmap",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "from",
+                "value": "${__from}"
+              },
+              {
+                "key": "to",
+                "value": "${__to}"
+              }
+            ],
+            "data": ""
+          },
+          "columns": [
             {
-              "jsonPath": "$[*].time",
-              "name": "time",
-              "type": "time"
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
             },
             {
-              "jsonPath": "$[*].value",
-              "name": "value",
+              "selector": "value",
+              "text": "value",
               "type": "number"
             }
           ],
-          "method": "GET",
-          "queryParams": "from=${__from}&to=${__to}",
-          "refId": "A",
-          "urlPath": "/metrics/calendar-heatmap"
+          "data": "",
+          "filters": [],
+          "global_query_id": ""
         }
       ],
       "title": "Calendar Heatmap",
@@ -65,7 +88,7 @@
     },
     {
       "datasource": {
-        "type": "marcusolsson-json-datasource",
+        "type": "yesoreyeram-infinity-datasource",
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
@@ -95,48 +118,67 @@
       },
       "targets": [
         {
-          "cacheDurationSeconds": 0,
-          "fields": [
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "duckdb-query-api"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "root_selector": "$",
+          "url": "/metrics/api-activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "days",
+                "value": "30"
+              }
+            ],
+            "data": ""
+          },
+          "columns": [
             {
-              "jsonPath": "$[*].api",
-              "name": "api",
+              "selector": "api",
+              "text": "api",
               "type": "string"
             },
             {
-              "jsonPath": "$[*].create_draft_count",
-              "name": "create_draft",
+              "selector": "create_draft_count",
+              "text": "create_draft",
               "type": "number"
             },
             {
-              "jsonPath": "$[*].create_publish_count",
-              "name": "create_publish",
+              "selector": "create_publish_count",
+              "text": "create_publish",
               "type": "number"
             },
             {
-              "jsonPath": "$[*].first_publish_count",
-              "name": "first_publish",
+              "selector": "first_publish_count",
+              "text": "first_publish",
               "type": "number"
             },
             {
-              "jsonPath": "$[*].update_publish_count",
-              "name": "update_publish",
+              "selector": "update_publish_count",
+              "text": "update_publish",
               "type": "number"
             },
             {
-              "jsonPath": "$[*].unpublish_count",
-              "name": "unpublish",
+              "selector": "unpublish_count",
+              "text": "unpublish",
               "type": "number"
             },
             {
-              "jsonPath": "$[*].delete_count",
-              "name": "delete",
+              "selector": "delete_count",
+              "text": "delete",
               "type": "number"
             }
           ],
-          "method": "GET",
-          "queryParams": "days=30",
-          "refId": "A",
-          "urlPath": "/metrics/api-activity"
+          "data": "",
+          "filters": [],
+          "global_query_id": ""
         }
       ],
       "title": "API Activity",
@@ -145,7 +187,7 @@
     },
     {
       "datasource": {
-        "type": "marcusolsson-json-datasource",
+        "type": "yesoreyeram-infinity-datasource",
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
@@ -177,33 +219,56 @@
       },
       "targets": [
         {
-          "cacheDurationSeconds": 0,
-          "fields": [
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "duckdb-query-api"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "root_selector": "$",
+          "url": "/metrics/top-updated-contents",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "days",
+                "value": "30"
+              },
+              {
+                "key": "limit",
+                "value": "20"
+              }
+            ],
+            "data": ""
+          },
+          "columns": [
             {
-              "jsonPath": "$[*].api",
-              "name": "api",
+              "selector": "api",
+              "text": "api",
               "type": "string"
             },
             {
-              "jsonPath": "$[*].content_id",
-              "name": "content_id",
+              "selector": "content_id",
+              "text": "content_id",
               "type": "string"
             },
             {
-              "jsonPath": "$[*].count",
-              "name": "updated_count",
+              "selector": "count",
+              "text": "updated_count",
               "type": "number"
             },
             {
-              "jsonPath": "$[*].last_event_at",
-              "name": "last_event_at",
-              "type": "time"
+              "selector": "last_event_at",
+              "text": "last_event_at",
+              "type": "timestamp"
             }
           ],
-          "method": "GET",
-          "queryParams": "days=30&limit=20",
-          "refId": "A",
-          "urlPath": "/metrics/top-updated-contents"
+          "data": "",
+          "filters": [],
+          "global_query_id": ""
         }
       ],
       "title": "Top Updated Contents",
@@ -212,7 +277,7 @@
     },
     {
       "datasource": {
-        "type": "marcusolsson-json-datasource",
+        "type": "yesoreyeram-infinity-datasource",
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
@@ -306,38 +371,51 @@
       },
       "targets": [
         {
-          "cacheDurationSeconds": 0,
-          "fields": [
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "duckdb-query-api"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "root_selector": "$",
+          "url": "/metrics/average-time-to-publish-by-api",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "days",
+                "value": "30"
+              },
+              {
+                "key": "unit",
+                "value": "${publish_duration_unit}"
+              }
+            ],
+            "data": ""
+          },
+          "columns": [
             {
-              "jsonPath": "$[*].api",
-              "name": "api",
+              "selector": "api",
+              "text": "api",
               "type": "string"
             },
             {
-              "jsonPath": "$[*].avg_days",
-              "name": "avg_days",
+              "selector": "avg_days",
+              "text": "avg_days",
               "type": "number"
             },
             {
-              "jsonPath": "$[*].avg_hours",
-              "name": "avg_hours",
+              "selector": "avg_hours",
+              "text": "avg_hours",
               "type": "number"
             }
           ],
-          "method": "GET",
-          "params": [
-            [
-              "days",
-              "30"
-            ],
-            [
-              "unit",
-              "${publish_duration_unit}"
-            ]
-          ],
-          "queryParams": "",
-          "refId": "A",
-          "urlPath": "/metrics/average-time-to-publish-by-api"
+          "data": "",
+          "filters": [],
+          "global_query_id": ""
         }
       ],
       "title": "Average Time to Publish by API",
@@ -356,7 +434,7 @@
     },
     {
       "datasource": {
-        "type": "marcusolsson-json-datasource",
+        "type": "yesoreyeram-infinity-datasource",
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
@@ -450,38 +528,51 @@
       },
       "targets": [
         {
-          "cacheDurationSeconds": 0,
-          "fields": [
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "duckdb-query-api"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "root_selector": "$",
+          "url": "/metrics/average-draft-to-publish-by-api",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "days",
+                "value": "30"
+              },
+              {
+                "key": "unit",
+                "value": "${publish_duration_unit}"
+              }
+            ],
+            "data": ""
+          },
+          "columns": [
             {
-              "jsonPath": "$[*].api",
-              "name": "api",
+              "selector": "api",
+              "text": "api",
               "type": "string"
             },
             {
-              "jsonPath": "$[*].avg_days",
-              "name": "avg_days",
+              "selector": "avg_days",
+              "text": "avg_days",
               "type": "number"
             },
             {
-              "jsonPath": "$[*].avg_hours",
-              "name": "avg_hours",
+              "selector": "avg_hours",
+              "text": "avg_hours",
               "type": "number"
             }
           ],
-          "method": "GET",
-          "params": [
-            [
-              "days",
-              "30"
-            ],
-            [
-              "unit",
-              "${publish_duration_unit}"
-            ]
-          ],
-          "queryParams": "",
-          "refId": "A",
-          "urlPath": "/metrics/average-draft-to-publish-by-api"
+          "data": "",
+          "filters": [],
+          "global_query_id": ""
         }
       ],
       "title": "Average Draft to Publish by API",

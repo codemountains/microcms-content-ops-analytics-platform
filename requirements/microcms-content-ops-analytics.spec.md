@@ -292,7 +292,7 @@ Query parameters:
 | `days` | `30` | 集計対象期間 |
 | `unit` | `days` | `days` または `hours` |
 
-レスポンスは Grafana JSON API datasource が各 JSONPath を同じ長さの field として扱えるよう、`avg_days` と `avg_hours` の両方を返す。
+レスポンスは Grafana Infinity datasource が各 column を同じ長さの field として扱えるよう、`avg_days` と `avg_hours` の両方を返す。
 選択していない unit の field は `null` とする。
 
 `unit=days` response example:
@@ -334,7 +334,7 @@ Query parameters:
 | `days` | `30` | 集計対象期間 |
 | `unit` | `days` | `days` または `hours` |
 
-レスポンスは Grafana JSON API datasource が各 JSONPath を同じ長さの field として扱えるよう、`avg_days` と `avg_hours` の両方を返す。
+レスポンスは Grafana Infinity datasource が各 column を同じ長さの field として扱えるよう、`avg_days` と `avg_hours` の両方を返す。
 選択していない unit の field は `null` とする。`sample_count` は平均算出件数の確認用であり、duration chart では描画しない。
 
 `unit=days` response example:
