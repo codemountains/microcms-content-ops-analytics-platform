@@ -166,6 +166,23 @@ run_jq "Top Updated Contents count field mapping" -e '
   | select(.selector == "count" and .text == "updated_count" and .type == "number")
 '
 
+run_jq "Top Updated Contents column order transformation" -e '
+  .panels[]
+  | select(.title == "Top Updated Contents")
+  | .transformations
+  | index([{
+      "id": "organize",
+      "options": {
+        "indexByName": {
+          "api": 0,
+          "content_id": 1,
+          "updated_count": 2,
+          "last_event_at": 3
+        }
+      }
+    }])
+'
+
 run_jq "Top Updated Contents last_event_at display override" -e '
   .panels[]
   | select(.title == "Top Updated Contents")
