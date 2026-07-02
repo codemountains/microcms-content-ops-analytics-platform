@@ -289,6 +289,19 @@
       ],
       "title": "Top Updated Contents",
       "description": "event_type が new または edit で content_id があるイベントを対象に、更新回数が多いコンテンツ上位 20 件（直近 30 日）を表示します。updated_count は API の count、last_event_at は最終イベント時刻です。",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "api": 0,
+              "content_id": 1,
+              "updated_count": 2,
+              "last_event_at": 3
+            }
+          }
+        }
+      ],
       "type": "table"
     },
     {
