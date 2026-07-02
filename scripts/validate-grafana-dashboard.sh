@@ -50,8 +50,8 @@ run_jq "Calendar Heatmap panel wiring" -e '
       [
         {"jsonPath":"$[*].time","name":"time","type":"time"},
         {"jsonPath":"$[*].value","name":"value","type":"number"}
-      ];
-      $fields | index(.)
+      ][];
+      . as $required | $fields | index($required)
     )
 '
 
@@ -65,8 +65,8 @@ run_jq "API Activity field mappings" -e '
         {"jsonPath":"$[*].update_publish_count","name":"update_publish","type":"number"},
         {"jsonPath":"$[*].unpublish_count","name":"unpublish","type":"number"},
         {"jsonPath":"$[*].delete_count","name":"delete","type":"number"}
-      ];
-      $fields | index(.)
+      ][];
+      . as $required | $fields | index($required)
     )
 '
 
