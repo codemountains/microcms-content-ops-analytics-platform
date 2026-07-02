@@ -2,13 +2,16 @@ use duckdb::Connection;
 
 use super::event_kind;
 use super::{AverageDraftToPublishRow, JST_OFFSET_INTERVAL, collect_rows};
+use crate::handler::PublishDurationUnit;
 
 pub(crate) fn query_average_draft_to_publish_rows(
     connection: &Connection,
     events_sql: &str,
     days: u32,
+    unit: PublishDurationUnit,
 ) -> duckdb::Result<Vec<AverageDraftToPublishRow>> {
     let days_minus_one = days - 1;
+    let (divisor, value_column) = unit.sql_parts();
     let create_draft = event_kind::CREATE_DRAFT;
     let first_publish = event_kind::FIRST_PUBLISH;
     let sql = format!(
@@ -40,7 +43,7 @@ pub(crate) fn query_average_draft_to_publish_rows(
         )
         SELECT
           drafts.api,
-          AVG(date_diff('second', drafts.draft_at, first_publishes.published_at) / 86400.0) AS avg_days,
+          AVG(date_diff('second', drafts.draft_at, first_publishes.published_at) / {divisor}) AS {value_column},
           COUNT(*) AS sample_count
         FROM drafts
         INNER JOIN first_publishes
@@ -48,15 +51,17 @@ pub(crate) fn query_average_draft_to_publish_rows(
           AND drafts.content_id = first_publishes.content_id
         WHERE first_publishes.published_at >= drafts.draft_at
         GROUP BY drafts.api
-        ORDER BY avg_days DESC, drafts.api
+        ORDER BY {value_column} DESC, drafts.api
         "#
     );
 
     let mut statement = connection.prepare(&sql)?;
     let rows = statement.query_map([], |row| {
+        let value = row.get(1)?;
         Ok(AverageDraftToPublishRow {
             api: row.get(0)?,
-            avg_days: row.get(1)?,
+            avg_days: unit.days_value(value),
+            avg_hours: unit.hours_value(value),
             sample_count: row.get(2)?,
         })
     })?;
@@ -116,14 +121,39 @@ mod tests {
         "#
         .replace("{current_jst_date}", current_jst_date);
 
-        let rows = query_average_draft_to_publish_rows(&connection, &events_sql, 30).unwrap();
+        let day_rows = query_average_draft_to_publish_rows(
+            &connection,
+            &events_sql,
+            30,
+            PublishDurationUnit::Days,
+        )
+        .unwrap();
+        let hour_rows = query_average_draft_to_publish_rows(
+            &connection,
+            &events_sql,
+            30,
+            PublishDurationUnit::Hours,
+        )
+        .unwrap();
 
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].api.as_deref(), Some("blogs"));
-        assert_eq!(rows[0].avg_days, 3.5);
-        assert_eq!(rows[0].sample_count, 2);
-        assert_eq!(rows[1].api.as_deref(), Some("authors"));
-        assert_eq!(rows[1].avg_days, 1.0);
-        assert_eq!(rows[1].sample_count, 1);
+        assert_eq!(day_rows.len(), 2);
+        assert_eq!(day_rows[0].api.as_deref(), Some("blogs"));
+        assert_eq!(day_rows[0].avg_days, Some(3.5));
+        assert_eq!(day_rows[0].avg_hours, None);
+        assert_eq!(day_rows[0].sample_count, 2);
+        assert_eq!(day_rows[1].api.as_deref(), Some("authors"));
+        assert_eq!(day_rows[1].avg_days, Some(1.0));
+        assert_eq!(day_rows[1].avg_hours, None);
+        assert_eq!(day_rows[1].sample_count, 1);
+
+        assert_eq!(hour_rows.len(), 2);
+        assert_eq!(hour_rows[0].api.as_deref(), Some("blogs"));
+        assert_eq!(hour_rows[0].avg_days, None);
+        assert_eq!(hour_rows[0].avg_hours, Some(84.0));
+        assert_eq!(hour_rows[0].sample_count, 2);
+        assert_eq!(hour_rows[1].api.as_deref(), Some("authors"));
+        assert_eq!(hour_rows[1].avg_days, None);
+        assert_eq!(hour_rows[1].avg_hours, Some(24.0));
+        assert_eq!(hour_rows[1].sample_count, 1);
     }
 }

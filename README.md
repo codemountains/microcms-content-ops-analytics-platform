@@ -292,7 +292,7 @@ docker compose up --build
 | `http://localhost:8000/metrics/api-activity` | API ごとの `event_kind` 別件数 |
 | `http://localhost:8000/metrics/top-updated-contents` | 更新回数が多いコンテンツ |
 | `http://localhost:8000/metrics/average-time-to-publish-by-api` | API ごとの平均公開所要日数 / 時間 |
-| `http://localhost:8000/metrics/average-draft-to-publish-by-api` | API ごとの下書き作成から初回公開までの平均所要日数 |
+| `http://localhost:8000/metrics/average-draft-to-publish-by-api` | API ごとの下書き作成から初回公開までの平均所要日数 / 時間 |
 | `http://localhost:3000` | Grafana |
 
 ## OpenTofu / ローカルデバッグ
