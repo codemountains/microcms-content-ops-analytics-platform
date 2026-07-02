@@ -126,7 +126,8 @@ run_jq "API Activity field mappings" -e '
         {"selector":"create_publish_count","text":"create_publish","type":"number"},
         {"selector":"first_publish_count","text":"first_publish","type":"number"},
         {"selector":"update_publish_count","text":"update_publish","type":"number"},
-        {"selector":"unpublish_count","text":"unpublish","type":"number"},
+        {"selector":"unpublish_to_draft_count","text":"unpublish_to_draft","type":"number"},
+        {"selector":"unpublish_to_closed_count","text":"unpublish_to_closed","type":"number"},
         {"selector":"delete_count","text":"delete","type":"number"}
       ][];
       . as $required | $fields | index($required)
@@ -146,8 +147,9 @@ run_jq "API Activity series order transformation" -e '
           "create_publish": 2,
           "first_publish": 3,
           "update_publish": 4,
-          "unpublish": 5,
-          "delete": 6
+          "unpublish_to_draft": 5,
+          "unpublish_to_closed": 6,
+          "delete": 7
         }
       }
     }])

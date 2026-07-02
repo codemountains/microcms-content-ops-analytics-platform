@@ -166,8 +166,13 @@
               "type": "number"
             },
             {
-              "selector": "unpublish_count",
-              "text": "unpublish",
+              "selector": "unpublish_to_draft_count",
+              "text": "unpublish_to_draft",
+              "type": "number"
+            },
+            {
+              "selector": "unpublish_to_closed_count",
+              "text": "unpublish_to_closed",
               "type": "number"
             },
             {
@@ -182,7 +187,7 @@
         }
       ],
       "title": "API Activity",
-      "description": "API ごとの event_kind 別件数（直近 30 日）。create_draft / create_publish / first_publish / update_publish / unpublish / delete を stacked bar で表示します。",
+      "description": "API ごとの event_kind 別件数（直近 30 日）。create_draft / create_publish / first_publish / update_publish / unpublish_to_draft / unpublish_to_closed / delete を stacked bar で表示します。",
       "transformations": [
         {
           "id": "organize",
@@ -193,8 +198,9 @@
               "create_publish": 2,
               "first_publish": 3,
               "update_publish": 4,
-              "unpublish": 5,
-              "delete": 6
+              "unpublish_to_draft": 5,
+              "unpublish_to_closed": 6,
+              "delete": 7
             }
           }
         }

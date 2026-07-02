@@ -118,7 +118,7 @@ Usage:
 
 Options:
   --output-dir <path>     Output directory (default: .debug/parquet)
-  --preset <name>         smoke (7 handler-compatible files) or bulk (default: smoke)
+  --preset <name>         smoke (8 handler-compatible files) or bulk (default: smoke)
   --count <n>             Bulk event count (default: 10000)
   --days <n>              Bulk JST day span, inclusive (default: 365)
   --contents <n>          Bulk unique content IDs (default: 200)

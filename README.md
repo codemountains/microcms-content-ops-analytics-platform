@@ -111,7 +111,7 @@ s3://<bucket>/microcms_events/
 | `api` | string | microCMS の API ID |
 | `content_id` | string | コンテンツ ID |
 | `event_type` | string | microCMS Webhook の `type` (`new` / `edit` / `delete`) |
-| `event_kind` | string | 公開状態の変化を加味した分析用イベント分類 |
+| `event_kind` | string | 公開状態の変化を加味した分析用イベント分類（例: `CREATE_DRAFT`, `UNPUBLISH_TO_DRAFT`, `UNPUBLISH_TO_CLOSED`） |
 | `old_status` | string | 変更前ステータス |
 | `new_status` | string | 変更後ステータス |
 | `old_updated_at` | timestamp | 変更前コンテンツの更新日時 |

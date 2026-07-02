@@ -34,7 +34,8 @@ pub struct ApiActivityRow {
     pub create_publish_count: i64,
     pub first_publish_count: i64,
     pub update_publish_count: i64,
-    pub unpublish_count: i64,
+    pub unpublish_to_draft_count: i64,
+    pub unpublish_to_closed_count: i64,
     pub delete_count: i64,
     pub total_count: i64,
 }

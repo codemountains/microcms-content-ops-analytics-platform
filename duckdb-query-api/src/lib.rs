@@ -128,12 +128,44 @@ mod tests {
                     'example-service',
                     'blogs',
                     NULL,
-                    'UNPUBLISH',
+                    'UNPUBLISH_TO_DRAFT',
                     'edit',
                     'PUBLISH',
                     'DRAFT',
                     TIMESTAMP '{event_date} 14:00:00',
                     TIMESTAMP '{event_date} 15:00:00',
+                    NULL,
+                    NULL,
+                    NULL,
+                    '{{}}'
+                  UNION ALL
+                  SELECT
+                    TIMESTAMP '{event_date} 15:30:00',
+                    'example-service',
+                    'blogs',
+                    NULL,
+                    'UNPUBLISH_TO_CLOSED',
+                    'edit',
+                    'PUBLISH',
+                    'CLOSED',
+                    TIMESTAMP '{event_date} 14:30:00',
+                    TIMESTAMP '{event_date} 15:30:00',
+                    NULL,
+                    NULL,
+                    NULL,
+                    '{{}}'
+                  UNION ALL
+                  SELECT
+                    TIMESTAMP '{event_date} 15:45:00',
+                    'example-service',
+                    'blogs',
+                    NULL,
+                    'UNPUBLISH',
+                    'edit',
+                    'PUBLISH',
+                    'DRAFT',
+                    TIMESTAMP '{event_date} 14:45:00',
+                    TIMESTAMP '{event_date} 15:45:00',
                     NULL,
                     NULL,
                     NULL,
@@ -238,7 +270,7 @@ mod tests {
             row.time == format_partition_time(&zero_date.to_string()) && row.value == 0
         }));
         assert!(calendar.iter().any(|row| {
-            row.time == format_partition_time(&event_date.to_string()) && row.value == 7
+            row.time == format_partition_time(&event_date.to_string()) && row.value == 9
         }));
 
         assert_eq!(activity.len(), 2);
@@ -247,9 +279,10 @@ mod tests {
         assert_eq!(activity[0].create_publish_count, 1);
         assert_eq!(activity[0].first_publish_count, 1);
         assert_eq!(activity[0].update_publish_count, 1);
-        assert_eq!(activity[0].unpublish_count, 1);
+        assert_eq!(activity[0].unpublish_to_draft_count, 1);
+        assert_eq!(activity[0].unpublish_to_closed_count, 1);
         assert_eq!(activity[0].delete_count, 0);
-        assert_eq!(activity[0].total_count, 6);
+        assert_eq!(activity[0].total_count, 8);
         assert_eq!(activity[1].api.as_deref(), Some("authors"));
         assert_eq!(activity[1].delete_count, 1);
         assert_eq!(activity[1].total_count, 1);
