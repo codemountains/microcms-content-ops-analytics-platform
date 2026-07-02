@@ -11,6 +11,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: write
 
 env:
   DOCKER_BUILDKIT: "1"
@@ -19,7 +20,8 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      docker_any: ${{ steps.filter.outputs.docker_any }}
+      webhook_ingest: ${{ steps.filter.outputs.webhook_ingest }}
+      duckdb_query_api: ${{ steps.filter.outputs.duckdb_query_api }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -44,23 +46,64 @@ jobs:
           git cat-file -e "$base^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$base"
           git diff --name-only "$base" "$GITHUB_SHA" > changed-files.txt
 
-          docker_any=false
-          if grep -Eq '^(webhook-ingest/|duckdb-query-api/|Cargo\.toml$|Cargo\.lock$|\.dockerignore$|\.github/workflows/docker-build\.yml$)' changed-files.txt; then
-            docker_any=true
+          webhook_ingest=false
+          duckdb_query_api=false
+          if grep -Eq '^(webhook-ingest/|Cargo\.toml$|Cargo\.lock$|rust-toolchain\.toml$|\.dockerignore$|\.github/workflows/docker-build\.yml$)' changed-files.txt; then
+            webhook_ingest=true
+          fi
+          if grep -Eq '^(duckdb-query-api/|Cargo\.toml$|Cargo\.lock$|rust-toolchain\.toml$|\.dockerignore$|\.github/workflows/docker-build\.yml$)' changed-files.txt; then
+            duckdb_query_api=true
           fi
 
-          echo "docker_any=$docker_any" >> "$GITHUB_OUTPUT"
+          {
+            echo "webhook_ingest=$webhook_ingest"
+            echo "duckdb_query_api=$duckdb_query_api"
+          } >> "$GITHUB_OUTPUT"
 
-  smoke:
+  webhook-ingest-smoke:
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.docker_any == 'true'
+    if: needs.changes.outputs.webhook_ingest == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
       - name: Build webhook-ingest image
-        run: docker build --build-arg CARGO_PROFILE=debug --build-arg CARGO_BUILD_JOBS=1 -f webhook-ingest/Dockerfile -t webhook-ingest:ci .
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: webhook-ingest/Dockerfile
+          push: false
+          tags: webhook-ingest:ci
+          build-args: |
+            CARGO_PROFILE=debug
+            CARGO_BUILD_JOBS=2
+          cache-from: type=gha,scope=webhook-ingest
+          cache-to: type=gha,scope=webhook-ingest,mode=max
+
+  duckdb-query-api-smoke:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.duckdb_query_api == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Build duckdb-query-api image
-        run: docker build --build-arg CARGO_PROFILE=debug --build-arg CARGO_BUILD_JOBS=1 -f duckdb-query-api/Dockerfile -t duckdb-query-api:ci .
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: duckdb-query-api/Dockerfile
+          push: false
+          tags: duckdb-query-api:ci
+          build-args: |
+            CARGO_PROFILE=debug
+            CARGO_BUILD_JOBS=2
+          cache-from: type=gha,scope=duckdb-query-api
+          cache-to: type=gha,scope=duckdb-query-api,mode=max
