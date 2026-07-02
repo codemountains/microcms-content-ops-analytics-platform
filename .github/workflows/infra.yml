@@ -45,7 +45,7 @@ jobs:
           git diff --name-only "$base" "$GITHUB_SHA" > changed-files.txt
 
           infra_any=false
-          if grep -Eq '^(infra/|grafana/|docker-compose(\.local)?\.yml$|justfile$|\.github/workflows/infra\.yml$)' changed-files.txt; then
+          if grep -Eq '^(infra/|grafana/|scripts/|docker-compose(\.local)?\.yml$|justfile$|\.github/workflows/infra\.yml$)' changed-files.txt; then
             infra_any=true
           fi
 

@@ -12,7 +12,7 @@
 - Local debug: `docs/local-debug.md`
 - AWS deploy: `docs/aws-deploy.md`
 - Repo-local agent guardrails: `.agents/skills/references/microcms-content-ops-analytics-guardrails.md`
-- Command definitions: `justfile`
+- Command definitions: `justfile`（複雑な手続きは `scripts/` に切り出し）
 
 `README.md`、`requirements/`、`docs/`、`.agents/skills/`、実装が矛盾する場合は、勝手にどちらかへ寄せず、差分を明示してから方針を決めてください。
 
