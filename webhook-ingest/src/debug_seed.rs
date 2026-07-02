@@ -13,7 +13,7 @@ const EVENT_PREFIX: &str = "microcms_events";
 const SERVICE_ID: &str = "example-service";
 const BULK_APIS: &[&str] = &["blogs", "authors", "news", "categories", "pages"];
 /// Share of calendar days that receive filler events. Remaining days stay at zero in heatmap.
-const BULK_ACTIVE_DAY_DENSITY: f64 = 0.32;
+const BULK_ACTIVE_DAY_DENSITY: f64 = 0.55;
 const METRIC_CONTENTS_PER_API: u32 = 12;
 const METRIC_PUBLISH_WINDOW_DAYS: i64 = 30;
 const SMOKE_EVENT_IDS: [&str; 7] = [
@@ -142,7 +142,7 @@ fn generate_bulk_files(config: &DebugSeedConfig) -> Result<DebugSeedSummary, Ing
         let api = BULK_APIS[rng.next_usize(BULK_APIS.len())];
         let content_id = pick_content_id(&mut rng, config.contents);
         let template = pick_bulk_template(&mut rng);
-        let timing = BulkEventTiming::for_filler(api, &content_id, template, received_at, &mut rng);
+        let timing = BulkEventTiming::for_filler(template);
         push_bulk_event(
             &mut events,
             &mut min_dt,
@@ -526,39 +526,11 @@ struct BulkEventTiming {
 }
 
 impl BulkEventTiming {
-    fn for_filler(
-        api: &str,
-        content_id: &str,
-        template: BulkTemplate,
-        received_at: DateTime<Utc>,
-        rng: &mut SeededRng,
-    ) -> Self {
-        let content_index = content_id
-            .rsplit('-')
-            .next()
-            .and_then(|value| value.parse::<u32>().ok())
-            .unwrap_or(0);
-        let publish_lead_days =
-            api_publish_lead_days(api, content_index) + i64::from(rng.next_u32(3));
-        let draft_to_publish_days =
-            api_draft_to_publish_days(api, content_index) + i64::from(rng.next_u32(4));
-
-        match template {
-            BulkTemplate::CreateDraft => Self {
-                draft_created_at: Some(received_at - Duration::days(draft_to_publish_days)),
-                content_created_at: None,
-                content_published_at: None,
-            },
-            BulkTemplate::CreatePublish | BulkTemplate::FirstPublish => Self {
-                draft_created_at: None,
-                content_created_at: Some(received_at - Duration::days(publish_lead_days)),
-                content_published_at: Some(received_at),
-            },
-            _ => Self {
-                draft_created_at: None,
-                content_created_at: None,
-                content_published_at: None,
-            },
+    fn for_filler(_template: BulkTemplate) -> Self {
+        Self {
+            draft_created_at: None,
+            content_created_at: None,
+            content_published_at: None,
         }
     }
 }
@@ -605,11 +577,10 @@ fn build_sparse_active_days(
     active_days
 }
 
+/// Filler templates exclude CREATE_DRAFT / FIRST_PUBLISH / CREATE_PUBLISH so Grafana
+/// publish-duration metrics stay driven by coordinated metric-lifecycle pairs only.
 fn pick_bulk_template(rng: &mut SeededRng) -> BulkTemplate {
-    const TEMPLATES: [BulkTemplate; 7] = [
-        BulkTemplate::CreateDraft,
-        BulkTemplate::CreatePublish,
-        BulkTemplate::FirstPublish,
+    const TEMPLATES: [BulkTemplate; 4] = [
         BulkTemplate::UpdatePublish,
         BulkTemplate::Unpublish,
         BulkTemplate::Delete,
@@ -848,6 +819,7 @@ impl SeededRng {
 mod tests {
     use std::fs;
 
+    use arrow_array::StringArray;
     use bytes::Bytes;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
     use tempfile::tempdir;
@@ -972,10 +944,110 @@ mod tests {
         assert_eq!(summary.event_count, 2_000);
         let unique_days = count_unique_partition_dates(tempdir.path());
         assert!(
-            unique_days < 70,
-            "expected sparse heatmap days, got {unique_days}"
+            unique_days < 80,
+            "expected moderately sparse heatmap days, got {unique_days}"
         );
-        assert!(unique_days > 20);
+        assert!(unique_days > 35);
+    }
+
+    #[test]
+    fn bulk_filler_does_not_emit_publish_lifecycle_event_kinds() {
+        let tempdir = tempdir().unwrap();
+        generate_debug_parquet_files(&DebugSeedConfig {
+            output_dir: tempdir.path().to_path_buf(),
+            preset: DebugSeedPreset::Bulk,
+            count: 2_000,
+            days: 90,
+            contents: 20,
+            rows_per_file: 100,
+            seed: 42,
+        })
+        .unwrap();
+
+        let mut filler_lifecycle_kinds = 0usize;
+        for path in walk_parquet_files(tempdir.path()) {
+            let bytes = fs::read(&path).unwrap();
+            let builder = ParquetRecordBatchReaderBuilder::try_new(Bytes::from(bytes)).unwrap();
+            let reader = builder.build().unwrap();
+            for batch in reader {
+                let batch = batch.unwrap();
+                let content_ids = batch
+                    .column_by_name("content_id")
+                    .unwrap()
+                    .as_any()
+                    .downcast_ref::<StringArray>()
+                    .unwrap();
+                let event_kinds = batch
+                    .column_by_name("event_kind")
+                    .unwrap()
+                    .as_any()
+                    .downcast_ref::<StringArray>()
+                    .unwrap();
+                for row in 0..batch.num_rows() {
+                    let content_id = content_ids.value(row);
+                    if content_id.starts_with("metric-") {
+                        continue;
+                    }
+                    let kind = event_kinds.value(row);
+                    if matches!(kind, "CREATE_DRAFT" | "FIRST_PUBLISH" | "CREATE_PUBLISH") {
+                        filler_lifecycle_kinds += 1;
+                    }
+                }
+            }
+        }
+
+        assert_eq!(
+            filler_lifecycle_kinds, 0,
+            "filler must not emit publish lifecycle events that skew Grafana metrics"
+        );
+    }
+
+    #[test]
+    fn metric_lifecycle_draft_to_publish_days_stay_within_api_ranges() {
+        let mut events = Vec::new();
+        generate_bulk_metric_lifecycle_events(jst_today(), &mut events, &mut None, &mut None)
+            .unwrap();
+
+        for api in BULK_APIS {
+            let mut durations = Vec::new();
+            for index in 0..METRIC_CONTENTS_PER_API {
+                let content_id = format!("metric-{api}-{index}");
+                let draft = events
+                    .iter()
+                    .find(|event| {
+                        event.content_id.as_deref() == Some(content_id.as_str())
+                            && event.event_kind.as_deref() == Some("CREATE_DRAFT")
+                    })
+                    .expect("draft event");
+                let publish = events
+                    .iter()
+                    .find(|event| {
+                        event.content_id.as_deref() == Some(content_id.as_str())
+                            && event.event_kind.as_deref() == Some("FIRST_PUBLISH")
+                    })
+                    .expect("publish event");
+                durations.push(
+                    (publish.content_published_at.unwrap() - draft.draft_created_at.unwrap())
+                        .num_days(),
+                );
+            }
+
+            let min = *durations.iter().min().unwrap();
+            let max = *durations.iter().max().unwrap();
+            let base = match *api {
+                "blogs" => 4,
+                "authors" => 2,
+                "news" => 10,
+                "categories" => 6,
+                "pages" => 18,
+                _ => 8,
+            };
+            assert!(
+                min >= base && max <= base + 5,
+                "api={api} expected {base}..={} days, got {min}..={max}",
+                base + 5
+            );
+        }
     }
 
     #[test]
@@ -997,8 +1069,8 @@ mod tests {
     fn build_sparse_active_days_covers_fraction_of_range() {
         let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
         let active_days = build_sparse_active_days(&mut SeededRng::new(42), start, 90);
-        assert!(active_days.len() < 60);
-        assert!(active_days.len() > 15);
+        assert!(active_days.len() < 75);
+        assert!(active_days.len() > 35);
     }
 
     fn publish_lead_days_for_api(events: &[NormalizedEvent], api: &str) -> i64 {
