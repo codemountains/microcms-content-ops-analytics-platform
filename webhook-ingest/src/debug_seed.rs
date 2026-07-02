@@ -3,7 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveTime, TimeZone, Utc};
-use uuid::Uuid;
 
 use crate::{
     IngestError, NormalizedEvent, build_s3_key, event_to_parquet, events_to_parquet,
@@ -13,6 +12,15 @@ use crate::{
 const EVENT_PREFIX: &str = "microcms_events";
 const SERVICE_ID: &str = "example-service";
 const BULK_APIS: &[&str] = &["blogs", "authors", "news", "categories", "pages"];
+const SMOKE_EVENT_IDS: [&str; 7] = [
+    "018f1001-0000-7000-8000-000000000001",
+    "018f1001-0000-7000-8000-000000000002",
+    "018f1001-0000-7000-8000-000000000003",
+    "018f1001-0000-7000-8000-000000000004",
+    "018f1001-0000-7000-8000-000000000005",
+    "018f1001-0000-7000-8000-000000000006",
+    "018f1001-0000-7000-8000-000000000007",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DebugSeedPreset {
@@ -93,19 +101,12 @@ fn generate_smoke_files(config: &DebugSeedConfig) -> Result<DebugSeedSummary, In
     let mut max_dt = None;
     let mut partitions = BTreeMap::new();
 
-    for (body, received_at) in fixtures {
+    for (event_id, (body, received_at)) in SMOKE_EVENT_IDS.iter().zip(fixtures) {
         let event = normalize_payload(body.as_bytes(), received_at)?;
         track_date(&event, &mut min_dt, &mut max_dt);
         let service = event.service.as_deref().unwrap_or("unknown");
         let api = event.api.as_deref().unwrap_or("unknown");
-        let event_id = Uuid::now_v7();
-        let key = build_s3_key(
-            EVENT_PREFIX,
-            service,
-            api,
-            event.received_at,
-            &event_id.to_string(),
-        );
+        let key = build_s3_key(EVENT_PREFIX, service, api, event.received_at, event_id);
         let path = config.output_dir.join(&key);
         write_single_event_file(&path, &event)?;
         partitions.insert(partition_dir_from_key(&key), ());
@@ -178,7 +179,7 @@ fn smoke_fixtures(
     vec![
         smoke_fixture(
             "blogs",
-            "content-1",
+            Some("content-1"),
             "edit",
             Some("DRAFT"),
             Some("PUBLISH"),
@@ -203,7 +204,7 @@ fn smoke_fixtures(
         ),
         smoke_fixture(
             "blogs",
-            "content-1",
+            Some("content-1"),
             "new",
             None,
             Some("DRAFT"),
@@ -222,7 +223,7 @@ fn smoke_fixtures(
         ),
         smoke_fixture(
             "blogs",
-            "content-1",
+            Some("content-1"),
             "edit",
             Some("PUBLISH"),
             Some("PUBLISH"),
@@ -241,7 +242,7 @@ fn smoke_fixtures(
         ),
         smoke_fixture(
             "blogs",
-            "content-1",
+            None,
             "edit",
             Some("PUBLISH"),
             Some("DRAFT"),
@@ -260,7 +261,7 @@ fn smoke_fixtures(
         ),
         smoke_fixture(
             "blogs",
-            "content-1",
+            None,
             "edit",
             Some("DRAFT"),
             Some("DRAFT"),
@@ -276,7 +277,7 @@ fn smoke_fixtures(
         ),
         smoke_fixture(
             "blogs",
-            "content-2",
+            Some("content-2"),
             "new",
             None,
             Some("PUBLISH"),
@@ -298,7 +299,7 @@ fn smoke_fixtures(
         ),
         smoke_fixture(
             "authors",
-            "content-3",
+            None,
             "delete",
             Some("PUBLISH"),
             None,
@@ -318,7 +319,7 @@ fn smoke_fixtures(
 #[allow(clippy::too_many_arguments)]
 fn smoke_fixture(
     api: &str,
-    content_id: &str,
+    content_id: Option<&str>,
     event_type: &str,
     old_status: Option<&str>,
     new_status: Option<&str>,
@@ -367,11 +368,16 @@ fn smoke_fixture(
         format!("{{{}}}", fields.join(","))
     });
 
+    let id_field = match content_id {
+        Some(content_id) => format!(r#""id": "{content_id}","#),
+        None => String::new(),
+    };
+
     let body = format!(
         r#"{{
           "service": "{SERVICE_ID}",
           "api": "{api}",
-          "id": "{content_id}",
+          {id_field}
           "type": "{event_type}",
           "contents": {{
             "old": {},
@@ -656,14 +662,45 @@ mod tests {
 
         let parquet_files: Vec<_> = walk_parquet_files(tempdir.path());
         assert_eq!(parquet_files.len(), 7);
-        for path in parquet_files {
+        for path in &parquet_files {
             let key = path.strip_prefix(tempdir.path()).unwrap().to_string_lossy();
             assert!(key.contains("/service=example-service/"));
             assert!(key.contains("/api="));
             assert!(key.contains("/dt="));
             assert!(!key.contains("events-"));
-            read_parquet_row_count(&path, 1);
+            assert!(
+                SMOKE_EVENT_IDS
+                    .iter()
+                    .any(|event_id| key.ends_with(&format!("{event_id}.parquet"))),
+                "unexpected smoke parquet path: {key}"
+            );
+            read_parquet_row_count(path, 1);
         }
+    }
+
+    #[test]
+    fn smoke_fixtures_align_content_ids_with_duckdb_integration_test() {
+        let event_date = NaiveDate::from_ymd_opt(2026, 6, 29).unwrap();
+        let fixtures = smoke_fixtures(
+            event_date,
+            event_date - Duration::days(1),
+            event_date - Duration::days(2),
+            event_date - Duration::days(5),
+        );
+        let received_at = jst_datetime(event_date, NaiveTime::from_hms_opt(12, 0, 0).unwrap());
+        let events: Vec<_> = fixtures
+            .into_iter()
+            .map(|(body, at)| normalize_payload(body.as_bytes(), at).unwrap())
+            .collect();
+
+        assert_eq!(events[3].content_id, None);
+        assert_eq!(events[4].content_id, None);
+        assert_eq!(events[6].content_id, None);
+        assert_eq!(events[0].content_id.as_deref(), Some("content-1"));
+        assert_eq!(events[5].content_id.as_deref(), Some("content-2"));
+        assert_eq!(events[0].event_kind.as_deref(), Some("FIRST_PUBLISH"));
+        assert_eq!(events[6].event_kind.as_deref(), Some("DELETE"));
+        assert_eq!(received_at, events[0].received_at);
     }
 
     #[test]

@@ -13,9 +13,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
     if [ "$CARGO_PROFILE" = "release" ]; then \
-      cargo build --release -j "$CARGO_BUILD_JOBS" -p webhook-ingest && build_dir=release; \
+      cargo build --release -j "$CARGO_BUILD_JOBS" -p webhook-ingest --bin webhook-ingest && build_dir=release; \
     else \
-      cargo build -j "$CARGO_BUILD_JOBS" -p webhook-ingest && build_dir=debug; \
+      cargo build -j "$CARGO_BUILD_JOBS" -p webhook-ingest --bin webhook-ingest && build_dir=debug; \
     fi \
     && mkdir -p /out \
     && cp "target/$build_dir/webhook-ingest" /out/webhook-ingest
