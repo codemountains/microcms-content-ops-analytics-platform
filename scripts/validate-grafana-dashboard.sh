@@ -115,8 +115,8 @@ run_jq "Calendar Heatmap panel wiring" -e '
 run_jq "publish KPI panels are placed below Calendar Heatmap" -e '
   (.panels[] | select(.title == "Today Publish Count") | .type == "stat" and .gridPos == {"h":5,"w":12,"x":0,"y":9})
     and (.panels[] | select(.title == "Published State Rate") | .type == "gauge" and .gridPos == {"h":5,"w":12,"x":12,"y":9})
-    and (.panels[] | select(.title == "API Activity") | .type == "barchart" and .gridPos == {"h":10,"w":24,"x":0,"y":14})
-    and (.panels[] | select(.title == "Publish Action Trend") | .type == "timeseries" and .gridPos == {"h":8,"w":24,"x":0,"y":24})
+    and (.panels[] | select(.title == "API Activity") | .type == "barchart" and .gridPos == {"h":12,"w":24,"x":0,"y":14})
+    and (.panels[] | select(.title == "Publish Action Trend") | .type == "timeseries" and .gridPos == {"h":8,"w":24,"x":0,"y":26})
 '
 
 run_jq "Today Publish Count panel wiring" -e '
@@ -281,7 +281,7 @@ run_jq "Operation Category Breakdown panel wiring" -e '
   .panels[]
   | select(.title == "Operation Category Breakdown")
   | select(.type == "piechart")
-  | select(.gridPos == {"h":9,"w":12,"x":0,"y":32})
+  | select(.gridPos == {"h":9,"w":12,"x":0,"y":34})
   | .targets[]
   | select(.url == "/metrics/api-activity")
   | select((.url_options.params // []) == [{"key":"days","value":"30"}])
@@ -290,7 +290,7 @@ run_jq "Operation Category Breakdown panel wiring" -e '
 run_jq "Top Updated Contents panel position" -e '
   .panels[]
   | select(.title == "Top Updated Contents")
-  | .gridPos == {"h":9,"w":12,"x":0,"y":41}
+  | .gridPos == {"h":9,"w":12,"x":0,"y":43}
 '
 
 run_jq "Operation Category Breakdown category aggregation transformations" -e '
