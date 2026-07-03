@@ -249,8 +249,8 @@
           },
           "columns": [
             {
-              "selector": "publish_rate",
-              "text": "publish_rate",
+              "selector": "published_state_rate",
+              "text": "published_state_rate",
               "type": "number"
             }
           ],
@@ -259,8 +259,8 @@
           "global_query_id": ""
         }
       ],
-      "title": "Publish Rate",
-      "description": "今日の全イベント数に対する公開アクション（PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED）の割合を表示します。イベントが 0 件の場合は null です。",
+      "title": "Published State Rate",
+      "description": "今日の状態到達・維持イベントのうち公開状態に到達・維持した割合を表示します。ADD_DRAFT_TO_PUBLISHED / DISCARD_DRAFT_ON_PUBLISHED / DELETE_* は除外し、分母が 0 件の場合は null です。",
       "type": "gauge"
     },
     {

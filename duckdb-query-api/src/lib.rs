@@ -344,8 +344,9 @@ mod tests {
 
         assert_eq!(publish_summary.len(), 1);
         assert_eq!(publish_summary[0].publish_count, 2);
-        assert_eq!(publish_summary[0].total_count, 10);
-        assert_eq!(publish_summary[0].publish_rate, Some(2.0 / 10.0));
+        assert_eq!(publish_summary[0].published_state_count, 3);
+        assert_eq!(publish_summary[0].state_arrival_count, 6);
+        assert_eq!(publish_summary[0].published_state_rate, Some(0.5));
 
         assert!(publish_trend.iter().any(|row| {
             row.time == format_partition_time(&event_date.to_string())

@@ -77,8 +77,9 @@ pub struct AverageDraftToPublishRow {
 #[derive(Debug, Serialize)]
 pub struct PublishActionSummaryRow {
     pub publish_count: i64,
-    pub total_count: i64,
-    pub publish_rate: Option<f64>,
+    pub published_state_count: i64,
+    pub state_arrival_count: i64,
+    pub published_state_rate: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]

@@ -12,8 +12,14 @@ pub(crate) fn query_publish_action_summary_rows(
     days: u32,
 ) -> duckdb::Result<Vec<PublishActionSummaryRow>> {
     let days_minus_one = days - 1;
+    let initial_draft = event_kind::INITIAL_DRAFT;
+    let save_draft = event_kind::SAVE_DRAFT;
     let publish_from_draft = event_kind::PUBLISH_FROM_DRAFT;
     let initial_publish = event_kind::INITIAL_PUBLISH;
+    let update_published = event_kind::UPDATE_PUBLISHED;
+    let unpublish_to_draft = event_kind::UNPUBLISH_TO_DRAFT;
+    let unpublish_to_closed = event_kind::UNPUBLISH_TO_CLOSED;
+    let reopen_to_draft = event_kind::REOPEN_TO_DRAFT;
     let republish_from_closed = event_kind::REPUBLISH_FROM_CLOSED;
     let sql = format!(
         r#"
@@ -21,18 +27,26 @@ pub(crate) fn query_publish_action_summary_rows(
           SELECT
             CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY' AS start_date,
             CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) AS end_date
+        ),
+        summary AS (
+          SELECT
+            COALESCE(SUM(CASE WHEN event_kind IN ('{publish_from_draft}', '{initial_publish}', '{republish_from_closed}') THEN 1 ELSE 0 END), 0) AS publish_count,
+            COALESCE(SUM(CASE WHEN event_kind IN ('{publish_from_draft}', '{initial_publish}', '{update_published}', '{republish_from_closed}') THEN 1 ELSE 0 END), 0) AS published_state_count,
+            COALESCE(SUM(CASE WHEN event_kind IN ('{initial_draft}', '{save_draft}', '{publish_from_draft}', '{initial_publish}', '{update_published}', '{unpublish_to_draft}', '{unpublish_to_closed}', '{reopen_to_draft}', '{republish_from_closed}') THEN 1 ELSE 0 END), 0) AS state_arrival_count
+          FROM {events_sql}
+          WHERE
+            dt >= (SELECT start_date FROM bounds)
+            AND dt <= (SELECT end_date FROM bounds)
         )
         SELECT
-          COALESCE(SUM(CASE WHEN event_kind IN ('{publish_from_draft}', '{initial_publish}', '{republish_from_closed}') THEN 1 ELSE 0 END), 0) AS publish_count,
-          COUNT(*) AS total_count,
+          publish_count,
+          published_state_count,
+          state_arrival_count,
           CASE
-            WHEN COUNT(*) = 0 THEN NULL
-            ELSE COALESCE(SUM(CASE WHEN event_kind IN ('{publish_from_draft}', '{initial_publish}', '{republish_from_closed}') THEN 1 ELSE 0 END), 0)::DOUBLE / COUNT(*)
-          END AS publish_rate
-        FROM {events_sql}
-        WHERE
-          dt >= (SELECT start_date FROM bounds)
-          AND dt <= (SELECT end_date FROM bounds)
+            WHEN state_arrival_count = 0 THEN NULL
+            ELSE published_state_count::DOUBLE / state_arrival_count
+          END AS published_state_rate
+        FROM summary
         "#
     );
 
@@ -40,8 +54,9 @@ pub(crate) fn query_publish_action_summary_rows(
     let rows = statement.query_map([], |row| {
         Ok(PublishActionSummaryRow {
             publish_count: row.get(0)?,
-            total_count: row.get(1)?,
-            publish_rate: row.get(2)?,
+            published_state_count: row.get(1)?,
+            state_arrival_count: row.get(2)?,
+            published_state_rate: row.get(3)?,
         })
     })?;
     collect_rows(rows)
@@ -116,7 +131,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn summarizes_publish_actions_and_rate_for_selected_days() {
+    fn summarizes_publish_actions_and_published_state_rate_for_selected_days() {
         let connection = Connection::open_in_memory().unwrap();
         let current_jst_date =
             "CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE)";
@@ -130,6 +145,24 @@ mod tests {
               UNION ALL
               SELECT {current_jst_date}, 'UPDATE_PUBLISHED'
               UNION ALL
+              SELECT {current_jst_date}, 'INITIAL_DRAFT'
+              UNION ALL
+              SELECT {current_jst_date}, 'SAVE_DRAFT'
+              UNION ALL
+              SELECT {current_jst_date}, 'UNPUBLISH_TO_DRAFT'
+              UNION ALL
+              SELECT {current_jst_date}, 'UNPUBLISH_TO_CLOSED'
+              UNION ALL
+              SELECT {current_jst_date}, 'REOPEN_TO_DRAFT'
+              UNION ALL
+              SELECT {current_jst_date}, 'ADD_DRAFT_TO_PUBLISHED'
+              UNION ALL
+              SELECT {current_jst_date}, 'DISCARD_DRAFT_ON_PUBLISHED'
+              UNION ALL
+              SELECT {current_jst_date}, 'DELETE_PUBLISHED'
+              UNION ALL
+              SELECT {current_jst_date}, NULL
+              UNION ALL
               SELECT {current_jst_date} - INTERVAL 1 DAY, 'PUBLISH_FROM_DRAFT'
               UNION ALL
               SELECT {current_jst_date} + INTERVAL 1 DAY, 'INITIAL_PUBLISH'
@@ -141,27 +174,36 @@ mod tests {
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].publish_count, 3);
-        assert_eq!(rows[0].total_count, 4);
-        assert_eq!(rows[0].publish_rate, Some(3.0 / 4.0));
+        assert_eq!(rows[0].published_state_count, 4);
+        assert_eq!(rows[0].state_arrival_count, 9);
+        assert_eq!(rows[0].published_state_rate, Some(4.0 / 9.0));
         assert_eq!(
             serde_json::to_value(&rows[0]).unwrap(),
             json!({
                 "publish_count": 3,
-                "total_count": 4,
-                "publish_rate": 3.0 / 4.0
+                "published_state_count": 4,
+                "state_arrival_count": 9,
+                "published_state_rate": 4.0 / 9.0
             })
         );
     }
 
     #[test]
-    fn returns_null_publish_rate_when_no_events_exist() {
+    fn returns_null_published_state_rate_when_no_state_arrivals_exist() {
         let connection = Connection::open_in_memory().unwrap();
         let events_sql = r#"
             (
               SELECT
                 CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) AS dt,
-                'INITIAL_PUBLISH' AS event_kind
-              WHERE FALSE
+                'ADD_DRAFT_TO_PUBLISHED' AS event_kind
+              UNION ALL
+              SELECT
+                CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE),
+                'DISCARD_DRAFT_ON_PUBLISHED'
+              UNION ALL
+              SELECT
+                CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE),
+                'DELETE_PUBLISHED'
             )
         "#;
 
@@ -169,8 +211,9 @@ mod tests {
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].publish_count, 0);
-        assert_eq!(rows[0].total_count, 0);
-        assert_eq!(rows[0].publish_rate, None);
+        assert_eq!(rows[0].published_state_count, 0);
+        assert_eq!(rows[0].state_arrival_count, 0);
+        assert_eq!(rows[0].published_state_rate, None);
     }
 
     #[test]
