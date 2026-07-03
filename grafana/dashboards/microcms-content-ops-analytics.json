@@ -149,7 +149,7 @@
             "params": [
               {
                 "key": "days",
-                "value": "1"
+                "value": "7"
               }
             ],
             "data": ""
@@ -166,8 +166,8 @@
           "global_query_id": ""
         }
       ],
-      "title": "Today Publish Count",
-      "description": "今日の PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED の合計数を表示します。日付境界は JST の dt partition に揃えます。",
+      "title": "Weekly Publish Count",
+      "description": "直近1週間（7日）の PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED の合計数を表示します。日付境界は JST の dt partition に揃えます。",
       "type": "stat"
     },
     {
@@ -242,7 +242,7 @@
             "params": [
               {
                 "key": "days",
-                "value": "1"
+                "value": "7"
               }
             ],
             "data": ""
@@ -259,8 +259,8 @@
           "global_query_id": ""
         }
       ],
-      "title": "Published State Rate",
-      "description": "今日の状態到達・維持イベントのうち公開状態に到達・維持した割合を表示します。ADD_DRAFT_TO_PUBLISHED / DISCARD_DRAFT_ON_PUBLISHED / DELETE_* は除外し、分母が 0 件の場合は null です。",
+      "title": "Weekly Published State Rate",
+      "description": "直近1週間（7日）の状態到達・維持イベントのうち公開状態に到達・維持した割合を表示します。ADD_DRAFT_TO_PUBLISHED / DISCARD_DRAFT_ON_PUBLISHED / DELETE_* は除外し、分母が 0 件の場合は null です。",
       "type": "gauge"
     },
     {

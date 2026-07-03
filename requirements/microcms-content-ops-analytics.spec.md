@@ -275,7 +275,7 @@ Query parameters:
 
 | Parameter | Default | 説明 |
 | --- | --- | --- |
-| `days` | `30` | 集計対象期間。今日の公開数 / 公開状態率パネルでは `1` を指定する |
+| `days` | `30` | 集計対象期間。直近1週間の公開数 / 公開状態率パネルでは `7` を指定する |
 
 Response example:
 
@@ -776,8 +776,8 @@ Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Polic
 | パネル | API | 可視化形式 |
 | --- | --- | --- |
 | Calendar Heatmap | `/metrics/calendar-heatmap` | `tim012432-calendarheatmap-panel` |
-| Today Publish Count | `/metrics/publish-action-summary` | Stat |
-| Published State Rate | `/metrics/publish-action-summary` | Gauge |
+| Weekly Publish Count | `/metrics/publish-action-summary` | Stat |
+| Weekly Published State Rate | `/metrics/publish-action-summary` | Gauge |
 | Publish Action Trend | `/metrics/publish-action-trend` | Time series |
 | API Activity | `/metrics/api-activity` | Stacked Bar Chart |
 | Top Updated Contents | `/metrics/top-updated-contents` | Table |
@@ -791,8 +791,8 @@ Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Polic
 | パネル | description に含める指標定義 |
 | --- | --- |
 | Calendar Heatmap | Webhook 受信日（S3 パーティション `dt`、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）で絞り込み、0 件の日も表示する。 |
-| Today Publish Count | 今日の `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` の合計数。日付境界は JST の `dt` partition に揃える。 |
-| Published State Rate | 今日の状態到達・維持イベントのうち公開状態に到達・維持した割合。分子は `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `REPUBLISH_FROM_CLOSED`、分母は `INITIAL_DRAFT` / `SAVE_DRAFT` / `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `UNPUBLISH_TO_DRAFT` / `UNPUBLISH_TO_CLOSED` / `REOPEN_TO_DRAFT` / `REPUBLISH_FROM_CLOSED` とする。`ADD_DRAFT_TO_PUBLISHED` / `DISCARD_DRAFT_ON_PUBLISHED` / `DELETE_*` は除外し、分母が 0 件の場合は `null` とする。 |
+| Weekly Publish Count | 直近1週間（7日）の `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` の合計数。日付境界は JST の `dt` partition に揃える。 |
+| Weekly Published State Rate | 直近1週間（7日）の状態到達・維持イベントのうち公開状態に到達・維持した割合。分子は `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `REPUBLISH_FROM_CLOSED`、分母は `INITIAL_DRAFT` / `SAVE_DRAFT` / `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `UNPUBLISH_TO_DRAFT` / `UNPUBLISH_TO_CLOSED` / `REOPEN_TO_DRAFT` / `REPUBLISH_FROM_CLOSED` とする。`ADD_DRAFT_TO_PUBLISHED` / `DISCARD_DRAFT_ON_PUBLISHED` / `DELETE_*` は除外し、分母が 0 件の場合は `null` とする。 |
 | Publish Action Trend | 日別の `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` 件数。ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）で絞り込み、Time series の bar 表示で stacked series とし、0 件の日も表示する。 |
 | API Activity | API ごとの `event_kind` 件数（直近 30 日）。既定は 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）を horizontal stacked bar で表示する。`api_activity_view` で 14 種の詳細内訳に切り替えられる。 |
 | Top Updated Contents | `event_type IN ('new', 'edit')` かつ `content_id` があるイベントを対象に、更新回数が多いコンテンツ上位 20 件（直近 30 日）を表示する。`updated_count` は API の `count`、`last_event_at` は最終イベント時刻。 |
@@ -803,8 +803,8 @@ Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Polic
 API Activity は `/metrics/api-activity?days=30` の 14 種 count を Infinity datasource で取得し、Grafana transformation で 4 カテゴリ（`draft_activity` / `publish_activity` / `unpublish_activity` / `delete_activity`）に集約して stacked series として表示する。dashboard variable `api_activity_view` が詳細表示のときは `initial_draft_count` から `delete_closed_count` までの 14 系列を stacked bar で表示する。集約ルールは §6.2.1 に従う。
 Operation Category Breakdown は同じ `/metrics/api-activity?days=30` を再利用し、Grafana transformation で全 API を合算して 4 カテゴリの合計を求め、Pie chart の slice として表示する。`api_activity_view` の影響は受けず、常に 4 カテゴリ固定とする。
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
-Today Publish Count と Published State Rate は Calendar Heatmap の直下に横並びで配置し、その下に API Activity、さらにその下に Publish Action Trend を全幅で配置する。
-Today Publish Count は `/metrics/publish-action-summary?days=1` の `publish_count`、Published State Rate は同 API の `published_state_rate` を描画する。
+Weekly Publish Count と Weekly Published State Rate は Calendar Heatmap の直下に横並びで配置し、その下に API Activity、さらにその下に Publish Action Trend を全幅で配置する。
+Weekly Publish Count は `/metrics/publish-action-summary?days=7` の `publish_count`、Weekly Published State Rate は同 API（`days=7`）の `published_state_rate` を描画する。
 Publish Action Trend は `/metrics/publish-action-trend?from=${__timeFrom}&to=${__timeTo}` の `publish_from_draft_count`、`initial_publish_count`、`republish_from_closed_count` を stacked bar として描画する。
 Calendar Heatmap と Publish Action Trend では、ダッシュボードの time range（既定 `now-365d`）を Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` として API に渡す。
 ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
