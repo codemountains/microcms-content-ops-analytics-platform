@@ -809,7 +809,7 @@ Publish Action Trend は `/metrics/publish-action-trend?from=${__timeFrom}&to=${
 Calendar Heatmap と Publish Action Trend では、ダッシュボードの time range（既定 `now-365d`）を Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` として API に渡す。
 ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
 Top Updated Contents は API response の `count` field を Table 上では `updated_count` として表示し、`last_event_at` は field override で `dateTimeAsLocal` 表示とする。
-Operation Category Breakdown は Top Updated Contents の直下（左列）に配置する。
+Operation Category Breakdown は左列に配置し、その直下に Top Updated Contents を配置する。
 Average Time to Publish by API は dashboard variable `publish_duration_unit` により `days` / `hours` を切り替え、API には `unit=${publish_duration_unit}` を渡す。
 初期値は `days` とする。
 `days` 表示では `avg_days` を描画し、green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。

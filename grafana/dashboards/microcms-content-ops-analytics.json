@@ -1015,7 +1015,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 32
+        "y": 41
       },
       "id": 3,
       "options": {
@@ -1503,7 +1503,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 41
+        "y": 32
       },
       "id": 9,
       "options": {
@@ -1820,5 +1820,5 @@
   "timezone": "Asia/Tokyo",
   "title": "microCMS Content Ops Analytics",
   "uid": "microcms-content-ops",
-  "version": 9
+  "version": 10
 }

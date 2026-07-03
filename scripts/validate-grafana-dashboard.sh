@@ -281,10 +281,16 @@ run_jq "Operation Category Breakdown panel wiring" -e '
   .panels[]
   | select(.title == "Operation Category Breakdown")
   | select(.type == "piechart")
-  | select(.gridPos == {"h":9,"w":12,"x":0,"y":41})
+  | select(.gridPos == {"h":9,"w":12,"x":0,"y":32})
   | .targets[]
   | select(.url == "/metrics/api-activity")
   | select((.url_options.params // []) == [{"key":"days","value":"30"}])
+'
+
+run_jq "Top Updated Contents panel position" -e '
+  .panels[]
+  | select(.title == "Top Updated Contents")
+  | .gridPos == {"h":9,"w":12,"x":0,"y":41}
 '
 
 run_jq "Operation Category Breakdown category aggregation transformations" -e '
