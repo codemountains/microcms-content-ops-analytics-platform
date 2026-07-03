@@ -783,6 +783,7 @@ Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Polic
 | Top Updated Contents | `/metrics/top-updated-contents` | Table |
 | Average Time to Publish by API | `/metrics/average-time-to-publish-by-api` | Horizontal Bar Chart |
 | Average Draft to Publish by API | `/metrics/average-draft-to-publish-by-api` | Horizontal Bar Chart |
+| Operation Category Breakdown | `/metrics/api-activity` | Pie Chart |
 
 各 panel には Grafana 標準の `description` を設定し、パネルタイトル横の情報アイコンから指標定義を確認できるようにする。
 `description` は次の内容と矛盾しないこと。
@@ -797,8 +798,10 @@ Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Polic
 | Top Updated Contents | `event_type IN ('new', 'edit')` かつ `content_id` があるイベントを対象に、更新回数が多いコンテンツ上位 20 件（直近 30 日）を表示する。`updated_count` は API の `count`、`last_event_at` は最終イベント時刻。 |
 | Average Time to Publish by API | API ごとに、コンテンツ作成（`publishValue.createdAt`）から公開到達（`publishValue.publishedAt`）までの平均所要時間を表示する。`PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` を対象（直近 30 日）にし、`publish_duration_unit` で日数 / 時間を切り替える。 |
 | Average Draft to Publish by API | API ごとに、下書き作成（`draftValue.createdAt`）から下書き経由公開（`publishValue.publishedAt`）までの平均所要時間を表示する。同一 `api` / `content_id` の `INITIAL_DRAFT` と `PUBLISH_FROM_DRAFT` を結合する。期間フィルタは `PUBLISH_FROM_DRAFT` 側の `dt` に適用する（直近 30 日）。 |
+| Operation Category Breakdown | 直近 30 日の全 API を合算し、`event_kind` を 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）に集約した操作構成比を Pie chart で表示する。カテゴリ定義は §6.2.1 に従う。 |
 
 API Activity は `/metrics/api-activity?days=30` の 14 種 count を Infinity datasource で取得し、Grafana transformation で 4 カテゴリ（`draft_activity` / `publish_activity` / `unpublish_activity` / `delete_activity`）に集約して stacked series として表示する。dashboard variable `api_activity_view` が詳細表示のときは `initial_draft_count` から `delete_closed_count` までの 14 系列を stacked bar で表示する。集約ルールは §6.2.1 に従う。
+Operation Category Breakdown は同じ `/metrics/api-activity?days=30` を再利用し、Grafana transformation で全 API を合算して 4 カテゴリの合計を求め、Pie chart の slice として表示する。`api_activity_view` の影響は受けず、常に 4 カテゴリ固定とする。
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
 Today Publish Count と Published State Rate は Calendar Heatmap の直下に横並びで配置し、その下に API Activity、さらにその下に Publish Action Trend を全幅で配置する。
 Today Publish Count は `/metrics/publish-action-summary?days=1` の `publish_count`、Published State Rate は同 API の `published_state_rate` を描画する。
@@ -806,6 +809,7 @@ Publish Action Trend は `/metrics/publish-action-trend?from=${__timeFrom}&to=${
 Calendar Heatmap と Publish Action Trend では、ダッシュボードの time range（既定 `now-365d`）を Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` として API に渡す。
 ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
 Top Updated Contents は API response の `count` field を Table 上では `updated_count` として表示し、`last_event_at` は field override で `dateTimeAsLocal` 表示とする。
+Operation Category Breakdown は Top Updated Contents の直下（左列）に配置する。
 Average Time to Publish by API は dashboard variable `publish_duration_unit` により `days` / `hours` を切り替え、API には `unit=${publish_duration_unit}` を渡す。
 初期値は `days` とする。
 `days` 表示では `avg_days` を描画し、green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。

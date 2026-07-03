@@ -277,6 +277,44 @@ run_jq "API Activity horizontal bar chart options" -e '
   | select(.options.stacking == "normal")
 '
 
+run_jq "Operation Category Breakdown panel wiring" -e '
+  .panels[]
+  | select(.title == "Operation Category Breakdown")
+  | select(.type == "piechart")
+  | select(.gridPos == {"h":9,"w":12,"x":0,"y":41})
+  | .targets[]
+  | select(.url == "/metrics/api-activity")
+  | select((.url_options.params // []) == [{"key":"days","value":"30"}])
+'
+
+run_jq "Operation Category Breakdown category aggregation transformations" -e '
+  .panels[]
+  | select(.title == "Operation Category Breakdown")
+  | .transformations
+  | map(select(.id == "calculateField" and .options.mode == "reduceRow")) as $calcs
+  | ($calcs | length) == 4
+    and any($calcs[]; .options.alias == "draft_activity")
+    and any($calcs[]; .options.alias == "publish_activity")
+    and any($calcs[]; .options.alias == "unpublish_activity")
+    and any($calcs[]; .options.alias == "delete_activity")
+'
+
+run_jq "Operation Category Breakdown reduces all APIs to totals" -e '
+  .panels[]
+  | select(.title == "Operation Category Breakdown")
+  | .transformations as $transformations
+  | any(
+      $transformations[];
+      .id == "filterFieldsByName"
+        and .options.include.pattern == "^(draft_activity|publish_activity|unpublish_activity|delete_activity)$"
+    )
+    and any(
+      $transformations[];
+      .id == "reduce"
+        and any(.options.reducers[]; . == "sum")
+    )
+'
+
 run_jq "Top Updated Contents count field mapping" -e '
   .panels[]
   | select(.title == "Top Updated Contents")

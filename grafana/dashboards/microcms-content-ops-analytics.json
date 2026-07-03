@@ -1405,6 +1405,345 @@
         }
       ],
       "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "duckdb-query-api"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "draft_activity"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "下書き操作"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "publish_activity"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "公開・更新"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unpublish_activity"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "非公開・再開"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "delete_activity"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "削除"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 41
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "duckdb-query-api"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "root_selector": "$",
+          "url": "/metrics/api-activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "days",
+                "value": "30"
+              }
+            ],
+            "data": ""
+          },
+          "columns": [
+            {
+              "selector": "api",
+              "text": "api",
+              "type": "string"
+            },
+            {
+              "selector": "initial_draft_count",
+              "text": "initial_draft",
+              "type": "number"
+            },
+            {
+              "selector": "save_draft_count",
+              "text": "save_draft",
+              "type": "number"
+            },
+            {
+              "selector": "publish_from_draft_count",
+              "text": "publish_from_draft",
+              "type": "number"
+            },
+            {
+              "selector": "initial_publish_count",
+              "text": "initial_publish",
+              "type": "number"
+            },
+            {
+              "selector": "update_published_count",
+              "text": "update_published",
+              "type": "number"
+            },
+            {
+              "selector": "add_draft_to_published_count",
+              "text": "add_draft_to_published",
+              "type": "number"
+            },
+            {
+              "selector": "discard_draft_on_published_count",
+              "text": "discard_draft_on_published",
+              "type": "number"
+            },
+            {
+              "selector": "unpublish_to_draft_count",
+              "text": "unpublish_to_draft",
+              "type": "number"
+            },
+            {
+              "selector": "unpublish_to_closed_count",
+              "text": "unpublish_to_closed",
+              "type": "number"
+            },
+            {
+              "selector": "reopen_to_draft_count",
+              "text": "reopen_to_draft",
+              "type": "number"
+            },
+            {
+              "selector": "republish_from_closed_count",
+              "text": "republish_from_closed",
+              "type": "number"
+            },
+            {
+              "selector": "delete_draft_count",
+              "text": "delete_draft",
+              "type": "number"
+            },
+            {
+              "selector": "delete_published_count",
+              "text": "delete_published",
+              "type": "number"
+            },
+            {
+              "selector": "delete_closed_count",
+              "text": "delete_closed",
+              "type": "number"
+            }
+          ],
+          "data": "",
+          "filters": [],
+          "global_query_id": ""
+        }
+      ],
+      "title": "Operation Category Breakdown",
+      "description": "直近 30 日の全 API を合算し、event_kind を 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）に集約した操作構成比を円グラフで表示します。カテゴリ定義は API Activity と共通です。",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "api": 0,
+              "initial_draft": 1,
+              "save_draft": 2,
+              "publish_from_draft": 3,
+              "initial_publish": 4,
+              "update_published": 5,
+              "add_draft_to_published": 6,
+              "discard_draft_on_published": 7,
+              "unpublish_to_draft": 8,
+              "unpublish_to_closed": 9,
+              "reopen_to_draft": 10,
+              "republish_from_closed": 11,
+              "delete_draft": 12,
+              "delete_published": 13,
+              "delete_closed": 14
+            }
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "draft_activity",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "initial_draft",
+                "save_draft",
+                "add_draft_to_published",
+                "discard_draft_on_published"
+              ],
+              "reducer": "sum"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "publish_activity",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "publish_from_draft",
+                "initial_publish",
+                "update_published",
+                "republish_from_closed"
+              ],
+              "reducer": "sum"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "unpublish_activity",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "unpublish_to_draft",
+                "unpublish_to_closed",
+                "reopen_to_draft"
+              ],
+              "reducer": "sum"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "delete_activity",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "delete_draft",
+                "delete_published",
+                "delete_closed"
+              ],
+              "reducer": "sum"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "^(draft_activity|publish_activity|unpublish_activity|delete_activity)$"
+            }
+          }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "mode": "reduceFields",
+            "reducers": [
+              "sum"
+            ]
+          }
+        }
+      ],
+      "type": "piechart"
     }
   ],
   "preload": false,
@@ -1481,5 +1820,5 @@
   "timezone": "Asia/Tokyo",
   "title": "microCMS Content Ops Analytics",
   "uid": "microcms-content-ops",
-  "version": 8
+  "version": 9
 }
