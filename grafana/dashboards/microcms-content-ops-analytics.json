@@ -324,7 +324,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 24
       },
       "id": 8,
       "options": {
@@ -762,7 +762,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 14
       },
       "id": 2,
       "options": {
@@ -1481,5 +1481,5 @@
   "timezone": "Asia/Tokyo",
   "title": "microCMS Content Ops Analytics",
   "uid": "microcms-content-ops",
-  "version": 7
+  "version": 8
 }

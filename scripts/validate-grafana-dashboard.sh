@@ -115,7 +115,8 @@ run_jq "Calendar Heatmap panel wiring" -e '
 run_jq "publish KPI panels are placed below Calendar Heatmap" -e '
   (.panels[] | select(.title == "Today Publish Count") | .type == "stat" and .gridPos == {"h":5,"w":12,"x":0,"y":9})
     and (.panels[] | select(.title == "Published State Rate") | .type == "gauge" and .gridPos == {"h":5,"w":12,"x":12,"y":9})
-    and (.panels[] | select(.title == "Publish Action Trend") | .type == "timeseries" and .gridPos == {"h":8,"w":24,"x":0,"y":14})
+    and (.panels[] | select(.title == "API Activity") | .type == "barchart" and .gridPos == {"h":10,"w":24,"x":0,"y":14})
+    and (.panels[] | select(.title == "Publish Action Trend") | .type == "timeseries" and .gridPos == {"h":8,"w":24,"x":0,"y":24})
 '
 
 run_jq "Today Publish Count panel wiring" -e '
