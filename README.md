@@ -78,8 +78,8 @@ microcms-content-ops-analytics/
 | 指標 | 目的 |
 | --- | --- |
 | 日別 Webhook 件数 | コンテンツ更新量の推移を見る |
-| 今日の公開数 | 当日の公開・再公開アクション件数を見る |
-| 公開状態率 | 当日の状態到達・維持イベントに対する公開状態の割合を見る |
+| 直近1週間の公開数 | 直近1週間の公開・再公開アクション件数を見る |
+| 公開状態率 | 直近1週間の状態到達・維持イベントに対する公開状態の割合を見る |
 | 公開アクション数の推移 | 公開・再公開アクションの流れを見る |
 | API 別イベント件数 | どのコンテンツ種別が活発かを見る |
 | イベント種別別件数 | API ごとの `event_kind` 件数を見る |
@@ -309,7 +309,7 @@ docker compose up --build
 | --- | --- |
 | `http://localhost:8000/health` | DuckDB Query API の health check |
 | `http://localhost:8000/metrics/calendar-heatmap` | Calendar Heatmap 用の日別イベント件数 |
-| `http://localhost:8000/metrics/publish-action-summary` | 今日の公開数 / 公開状態率 |
+| `http://localhost:8000/metrics/publish-action-summary` | 直近1週間の公開数 / 公開状態率 |
 | `http://localhost:8000/metrics/publish-action-trend` | 日別の公開アクション数 |
 | `http://localhost:8000/metrics/api-activity` | API ごとの `event_kind` 別件数 |
 | `http://localhost:8000/metrics/top-updated-contents` | 更新回数が多いコンテンツ |

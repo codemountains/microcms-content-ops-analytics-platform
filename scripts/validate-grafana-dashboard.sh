@@ -113,28 +113,29 @@ run_jq "Calendar Heatmap panel wiring" -e '
 '
 
 run_jq "publish KPI panels are placed below Calendar Heatmap" -e '
-  (.panels[] | select(.title == "Today Publish Count") | .type == "stat" and .gridPos == {"h":5,"w":12,"x":0,"y":9})
-    and (.panels[] | select(.title == "Published State Rate") | .type == "gauge" and .gridPos == {"h":5,"w":12,"x":12,"y":9})
-    and (.panels[] | select(.title == "Publish Action Trend") | .type == "timeseries" and .gridPos == {"h":8,"w":24,"x":0,"y":14})
+  (.panels[] | select(.title == "Weekly Publish Count") | .type == "stat" and .gridPos == {"h":5,"w":12,"x":0,"y":9})
+    and (.panels[] | select(.title == "Weekly Published State Rate") | .type == "gauge" and .gridPos == {"h":5,"w":12,"x":12,"y":9})
+    and (.panels[] | select(.title == "API Activity") | .type == "barchart" and .gridPos == {"h":12,"w":24,"x":0,"y":14})
+    and (.panels[] | select(.title == "Publish Action Trend") | .type == "timeseries" and .gridPos == {"h":8,"w":24,"x":0,"y":26})
 '
 
-run_jq "Today Publish Count panel wiring" -e '
+run_jq "Weekly Publish Count panel wiring" -e '
   .panels[]
-  | select(.title == "Today Publish Count")
+  | select(.title == "Weekly Publish Count")
   | .targets[]
   | select(.url == "/metrics/publish-action-summary")
-  | select((.url_options.params // []) == [{"key":"days","value":"1"}])
+  | select((.url_options.params // []) == [{"key":"days","value":"7"}])
   | .columns[]
   | select(.selector == "publish_count" and .text == "publish_count" and .type == "number")
 '
 
-run_jq "Published State Rate panel wiring" -e '
+run_jq "Weekly Published State Rate panel wiring" -e '
   .panels[]
-  | select(.title == "Published State Rate")
+  | select(.title == "Weekly Published State Rate")
   | select(.fieldConfig.defaults.unit == "percentunit")
   | .targets[]
   | select(.url == "/metrics/publish-action-summary")
-  | select((.url_options.params // []) == [{"key":"days","value":"1"}])
+  | select((.url_options.params // []) == [{"key":"days","value":"7"}])
   | .columns[]
   | select(.selector == "published_state_rate" and .text == "published_state_rate" and .type == "number")
 '
@@ -217,6 +218,107 @@ run_jq "API Activity series order transformation" -e '
         }
       }
     }])
+'
+
+run_jq "api_activity_view dashboard variable" -e '
+  .templating.list[]
+  | select(.name == "api_activity_view" and .type == "custom")
+  | .options as $options
+  | any(
+      $options[];
+      .text == "カテゴリ集約"
+        and .value == "^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$"
+    )
+    and any(
+      $options[];
+      .text == "詳細 (14種)"
+        and .value == "^(api|initial_draft|save_draft|publish_from_draft|initial_publish|update_published|add_draft_to_published|discard_draft_on_published|unpublish_to_draft|unpublish_to_closed|reopen_to_draft|republish_from_closed|delete_draft|delete_published|delete_closed)$"
+    )
+'
+
+run_jq "api_activity_view query renders custom options" -e '
+  .templating.list[]
+  | select(.name == "api_activity_view" and .type == "custom")
+  | .query as $query
+  | ($query | length > 0)
+    and ($query | contains(" : "))
+    and ($query | contains("^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$"))
+    and ($query | contains("^(api|initial_draft|save_draft|publish_from_draft|initial_publish|update_published|add_draft_to_published|discard_draft_on_published|unpublish_to_draft|unpublish_to_closed|reopen_to_draft|republish_from_closed|delete_draft|delete_published|delete_closed)$"))
+'
+
+run_jq "API Activity category aggregation transformations" -e '
+  .panels[]
+  | select(.title == "API Activity")
+  | .transformations
+  | map(select(.id == "calculateField" and .options.mode == "reduceRow")) as $calcs
+  | ($calcs | length) == 4
+    and any($calcs[]; .options.alias == "draft_activity")
+    and any($calcs[]; .options.alias == "publish_activity")
+    and any($calcs[]; .options.alias == "unpublish_activity")
+    and any($calcs[]; .options.alias == "delete_activity")
+'
+
+run_jq "API Activity field filter by view" -e '
+  .panels[]
+  | select(.title == "API Activity")
+  | .transformations[]
+  | select(
+      .id == "filterFieldsByName"
+        and .options.include.pattern == "${api_activity_view}"
+    )
+'
+
+run_jq "API Activity horizontal bar chart options" -e '
+  .panels[]
+  | select(.title == "API Activity")
+  | select(.type == "barchart")
+  | select(.options.orientation == "horizontal")
+  | select(.options.tooltip.mode == "multi")
+  | select(.options.stacking == "normal")
+'
+
+run_jq "Operation Category Breakdown panel wiring" -e '
+  .panels[]
+  | select(.title == "Operation Category Breakdown")
+  | select(.type == "piechart")
+  | select(.gridPos == {"h":9,"w":12,"x":0,"y":34})
+  | .targets[]
+  | select(.url == "/metrics/api-activity")
+  | select((.url_options.params // []) == [{"key":"days","value":"30"}])
+'
+
+run_jq "Top Updated Contents panel position" -e '
+  .panels[]
+  | select(.title == "Top Updated Contents")
+  | .gridPos == {"h":9,"w":12,"x":0,"y":43}
+'
+
+run_jq "Operation Category Breakdown category aggregation transformations" -e '
+  .panels[]
+  | select(.title == "Operation Category Breakdown")
+  | .transformations
+  | map(select(.id == "calculateField" and .options.mode == "reduceRow")) as $calcs
+  | ($calcs | length) == 4
+    and any($calcs[]; .options.alias == "draft_activity")
+    and any($calcs[]; .options.alias == "publish_activity")
+    and any($calcs[]; .options.alias == "unpublish_activity")
+    and any($calcs[]; .options.alias == "delete_activity")
+'
+
+run_jq "Operation Category Breakdown reduces all APIs to totals" -e '
+  .panels[]
+  | select(.title == "Operation Category Breakdown")
+  | .transformations as $transformations
+  | any(
+      $transformations[];
+      .id == "filterFieldsByName"
+        and .options.include.pattern == "^(draft_activity|publish_activity|unpublish_activity|delete_activity)$"
+    )
+    and any(
+      $transformations[];
+      .id == "reduce"
+        and any(.options.reducers[]; . == "sum")
+    )
 '
 
 run_jq "Top Updated Contents count field mapping" -e '

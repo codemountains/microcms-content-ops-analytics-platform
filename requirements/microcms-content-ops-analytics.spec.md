@@ -275,7 +275,7 @@ Query parameters:
 
 | Parameter | Default | 説明 |
 | --- | --- | --- |
-| `days` | `30` | 集計対象期間。今日の公開数 / 公開状態率パネルでは `1` を指定する |
+| `days` | `30` | 集計対象期間。直近1週間の公開数 / 公開状態率パネルでは `7` を指定する |
 
 Response example:
 
@@ -490,6 +490,20 @@ s3://microcms-content-ops-events/microcms_events/**/*.parquet
 `PUBLISH` と `DRAFT` を同時に含む status は、`ADD_DRAFT_TO_PUBLISHED` / `DISCARD_DRAFT_ON_PUBLISHED` の special case を先に判定する。
 それ以外では公開中である事実を優先し、`PUBLISH` を含む status set は `PUBLISH` とみなす。
 `PUBLISH` を含まない複合 status や未知 status は `NULL` とし、既知 series には含めない。
+
+### 6.2.1 event_kind カテゴリ（API Activity 集約用）
+
+Grafana の API Activity パネルでは、既定で次の 4 カテゴリに集約して表示する。
+`api_activity_view` が詳細表示のときは、API が返す 14 種の個別 count を表示する。
+
+| カテゴリ field | 表示名 | 含める `event_kind` |
+| --- | --- | --- |
+| `draft_activity` | 下書き操作 | `INITIAL_DRAFT`, `SAVE_DRAFT`, `ADD_DRAFT_TO_PUBLISHED`, `DISCARD_DRAFT_ON_PUBLISHED` |
+| `publish_activity` | 公開・更新 | `PUBLISH_FROM_DRAFT`, `INITIAL_PUBLISH`, `UPDATE_PUBLISHED`, `REPUBLISH_FROM_CLOSED` |
+| `unpublish_activity` | 非公開・再開 | `UNPUBLISH_TO_DRAFT`, `UNPUBLISH_TO_CLOSED`, `REOPEN_TO_DRAFT` |
+| `delete_activity` | 削除 | `DELETE_DRAFT`, `DELETE_PUBLISHED`, `DELETE_CLOSED` |
+
+各カテゴリ count は所属 `event_kind` の合計とする。`GET /metrics/api-activity` の response shape は 14 種の個別 count を維持し、集約は Grafana transformation で行う。
 
 ## 6.3 Partition
 
@@ -762,13 +776,14 @@ Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Polic
 | パネル | API | 可視化形式 |
 | --- | --- | --- |
 | Calendar Heatmap | `/metrics/calendar-heatmap` | `tim012432-calendarheatmap-panel` |
-| Today Publish Count | `/metrics/publish-action-summary` | Stat |
-| Published State Rate | `/metrics/publish-action-summary` | Gauge |
+| Weekly Publish Count | `/metrics/publish-action-summary` | Stat |
+| Weekly Published State Rate | `/metrics/publish-action-summary` | Gauge |
 | Publish Action Trend | `/metrics/publish-action-trend` | Time series |
 | API Activity | `/metrics/api-activity` | Stacked Bar Chart |
 | Top Updated Contents | `/metrics/top-updated-contents` | Table |
 | Average Time to Publish by API | `/metrics/average-time-to-publish-by-api` | Horizontal Bar Chart |
 | Average Draft to Publish by API | `/metrics/average-draft-to-publish-by-api` | Horizontal Bar Chart |
+| Operation Category Breakdown | `/metrics/api-activity` | Pie Chart |
 
 各 panel には Grafana 標準の `description` を設定し、パネルタイトル横の情報アイコンから指標定義を確認できるようにする。
 `description` は次の内容と矛盾しないこと。
@@ -776,27 +791,31 @@ Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Polic
 | パネル | description に含める指標定義 |
 | --- | --- |
 | Calendar Heatmap | Webhook 受信日（S3 パーティション `dt`、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）で絞り込み、0 件の日も表示する。 |
-| Today Publish Count | 今日の `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` の合計数。日付境界は JST の `dt` partition に揃える。 |
-| Published State Rate | 今日の状態到達・維持イベントのうち公開状態に到達・維持した割合。分子は `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `REPUBLISH_FROM_CLOSED`、分母は `INITIAL_DRAFT` / `SAVE_DRAFT` / `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `UNPUBLISH_TO_DRAFT` / `UNPUBLISH_TO_CLOSED` / `REOPEN_TO_DRAFT` / `REPUBLISH_FROM_CLOSED` とする。`ADD_DRAFT_TO_PUBLISHED` / `DISCARD_DRAFT_ON_PUBLISHED` / `DELETE_*` は除外し、分母が 0 件の場合は `null` とする。 |
+| Weekly Publish Count | 直近1週間（7日）の `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` の合計数。日付境界は JST の `dt` partition に揃える。 |
+| Weekly Published State Rate | 直近1週間（7日）の状態到達・維持イベントのうち公開状態に到達・維持した割合。分子は `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `REPUBLISH_FROM_CLOSED`、分母は `INITIAL_DRAFT` / `SAVE_DRAFT` / `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `UNPUBLISH_TO_DRAFT` / `UNPUBLISH_TO_CLOSED` / `REOPEN_TO_DRAFT` / `REPUBLISH_FROM_CLOSED` とする。`ADD_DRAFT_TO_PUBLISHED` / `DISCARD_DRAFT_ON_PUBLISHED` / `DELETE_*` は除外し、分母が 0 件の場合は `null` とする。 |
 | Publish Action Trend | 日別の `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` 件数。ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）で絞り込み、Time series の bar 表示で stacked series とし、0 件の日も表示する。 |
-| API Activity | API ごとの `event_kind` 別件数（直近 30 日）。新しい詳細 event_kind 14 種を stacked bar で表示する。 |
+| API Activity | API ごとの `event_kind` 件数（直近 30 日）。既定は 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）を horizontal stacked bar で表示する。`api_activity_view` で 14 種の詳細内訳に切り替えられる。 |
 | Top Updated Contents | `event_type IN ('new', 'edit')` かつ `content_id` があるイベントを対象に、更新回数が多いコンテンツ上位 20 件（直近 30 日）を表示する。`updated_count` は API の `count`、`last_event_at` は最終イベント時刻。 |
 | Average Time to Publish by API | API ごとに、コンテンツ作成（`publishValue.createdAt`）から公開到達（`publishValue.publishedAt`）までの平均所要時間を表示する。`PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` を対象（直近 30 日）にし、`publish_duration_unit` で日数 / 時間を切り替える。 |
 | Average Draft to Publish by API | API ごとに、下書き作成（`draftValue.createdAt`）から下書き経由公開（`publishValue.publishedAt`）までの平均所要時間を表示する。同一 `api` / `content_id` の `INITIAL_DRAFT` と `PUBLISH_FROM_DRAFT` を結合する。期間フィルタは `PUBLISH_FROM_DRAFT` 側の `dt` に適用する（直近 30 日）。 |
+| Operation Category Breakdown | 直近 30 日の全 API を合算し、`event_kind` を 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）に集約した操作構成比を Pie chart で表示する。カテゴリ定義は §6.2.1 に従う。 |
 
-API Activity は `initial_draft_count`、`save_draft_count`、`publish_from_draft_count`、`initial_publish_count`、`update_published_count`、`add_draft_to_published_count`、`discard_draft_on_published_count`、`unpublish_to_draft_count`、`unpublish_to_closed_count`、`reopen_to_draft_count`、`republish_from_closed_count`、`delete_draft_count`、`delete_published_count`、`delete_closed_count` を stacked series として表示する。
+API Activity は `/metrics/api-activity?days=30` の 14 種 count を Infinity datasource で取得し、Grafana transformation で 4 カテゴリ（`draft_activity` / `publish_activity` / `unpublish_activity` / `delete_activity`）に集約して stacked series として表示する。dashboard variable `api_activity_view` が詳細表示のときは `initial_draft_count` から `delete_closed_count` までの 14 系列を stacked bar で表示する。集約ルールは §6.2.1 に従う。
+Operation Category Breakdown は同じ `/metrics/api-activity?days=30` を再利用し、Grafana transformation で全 API を合算して 4 カテゴリの合計を求め、Pie chart の slice として表示する。`api_activity_view` の影響は受けず、常に 4 カテゴリ固定とする。
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
-Today Publish Count と Published State Rate は Calendar Heatmap の直下に横並びで配置し、その下に Publish Action Trend を全幅で配置する。
-Today Publish Count は `/metrics/publish-action-summary?days=1` の `publish_count`、Published State Rate は同 API の `published_state_rate` を描画する。
+Weekly Publish Count と Weekly Published State Rate は Calendar Heatmap の直下に横並びで配置し、その下に API Activity、さらにその下に Publish Action Trend を全幅で配置する。
+Weekly Publish Count は `/metrics/publish-action-summary?days=7` の `publish_count`、Weekly Published State Rate は同 API（`days=7`）の `published_state_rate` を描画する。
 Publish Action Trend は `/metrics/publish-action-trend?from=${__timeFrom}&to=${__timeTo}` の `publish_from_draft_count`、`initial_publish_count`、`republish_from_closed_count` を stacked bar として描画する。
 Calendar Heatmap と Publish Action Trend では、ダッシュボードの time range（既定 `now-365d`）を Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` として API に渡す。
 ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
 Top Updated Contents は API response の `count` field を Table 上では `updated_count` として表示し、`last_event_at` は field override で `dateTimeAsLocal` 表示とする。
+Operation Category Breakdown は左列に配置し、その直下に Top Updated Contents を配置する。
 Average Time to Publish by API は dashboard variable `publish_duration_unit` により `days` / `hours` を切り替え、API には `unit=${publish_duration_unit}` を渡す。
 初期値は `days` とする。
 `days` 表示では `avg_days` を描画し、green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。
 `hours` 表示では `avg_hours` を描画し、green `< 24h`、yellow `< 72h`、red `>= 72h` の threshold を使う。
 Average Draft to Publish by API は Average Time to Publish by API と並置し、dashboard variable `publish_duration_unit` により `days` / `hours` を切り替え、API には `unit=${publish_duration_unit}` を渡す。`days` 表示では `avg_days`、`hours` 表示では `avg_hours` を描画する。API response の `sample_count` は平均算出件数の確認用であり、duration chart では描画しない。
+dashboard variable `api_activity_view` は API Activity パネルの表示列を切り替える。既定は 4 カテゴリ集約、詳細表示では 14 種の個別 series を表示する。
 
 Grafana Cloud provisioning は次の contract とする。
 
