@@ -148,11 +148,12 @@ just debug-parquet-delete
 
 ### 1 年分（bulk）
 
-Grafana dashboard の既定 time range（過去 365 日）に合わせ、**10,000 件 / 365 日分**のダミーデータを生成します。layout は partition 単位の batched file（local seed 専用）です。
+Grafana dashboard の既定 time range（過去 365 日）に合わせ、**50,000 件 / 365 日分**のダミーデータを生成します。layout は partition 単位の batched file（local seed 専用）です。
 
-- Calendar Heatmap: 全カレンダー日の約 55% にイベントを配置し、残りは 0 件の日を残します
-- API Activity: `create_draft` / `create_publish` / `first_publish` / `update_publish` / `unpublish_to_draft` / `unpublish_to_closed` / `delete` を 30:15:20:25:5:2:3 の比率で生成します
-- Average Time to Publish / Average Draft to Publish: coordinated `metric-*` lifecycle ペアで API ごとの日数バラつきを持たせます
+- Calendar Heatmap: 全カレンダー日の約 80% にイベントを配置し、平日寄り・月内キャンペーン日寄りの自然な山谷と少量の 0 件日を残します
+- API Activity: `INITIAL_DRAFT` / `SAVE_DRAFT` / `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `ADD_DRAFT_TO_PUBLISHED` / `DISCARD_DRAFT_ON_PUBLISHED` / `UNPUBLISH_TO_DRAFT` / `UNPUBLISH_TO_CLOSED` / `REOPEN_TO_DRAFT` / `REPUBLISH_FROM_CLOSED` / `DELETE_DRAFT` / `DELETE_PUBLISHED` / `DELETE_CLOSED` を realistic な比率で配分します
+- Average Time to Publish / Average Draft to Publish: coordinated `metric-*` lifecycle ペアで API ごとの日数バラつきを持たせます。`blogs` / `authors` / `news` / `categories` / `pages` に加え、`advertisements` / `tags` / `labels` / `papers` / `cards` を生成対象にします
+- Publish Action Trend: `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` は平均約 5 件/日、最大 20 件/日以下を目安に、365 日全体で後半に偏らない realistic schedule に沿って配置します
 
 `--count` / `DEBUG_SEED_COUNT` で指定した件数どおりに生成します。smoke と同様、生成前にローカル `microcms_events/` をクリアし、S3 sync は `--delete` で prefix を置き換えます。
 
@@ -163,7 +164,7 @@ just debug-parquet-seed-large
 件数や期間を変える場合:
 
 ```bash
-DEBUG_SEED_COUNT=50000 DEBUG_SEED_DAYS=365 just debug-parquet-seed-large
+DEBUG_SEED_COUNT=30000 DEBUG_SEED_DAYS=365 just debug-parquet-seed-large
 ```
 
 ## 8. S3 Parquet を確認する

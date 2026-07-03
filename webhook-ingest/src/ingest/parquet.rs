@@ -224,7 +224,7 @@ mod tests {
             .as_any()
             .downcast_ref::<StringArray>()
             .unwrap();
-        assert_eq!(event_kind.value(0), "FIRST_PUBLISH");
+        assert_eq!(event_kind.value(0), "PUBLISH_FROM_DRAFT");
         assert!(
             batch
                 .schema()

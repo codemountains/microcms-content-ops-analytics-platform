@@ -12,8 +12,9 @@ pub(crate) fn query_average_time_to_publish_rows(
 ) -> duckdb::Result<Vec<AverageTimeToPublishRow>> {
     let days_minus_one = days - 1;
     let (divisor, value_column) = unit.sql_parts();
-    let create_publish = event_kind::CREATE_PUBLISH;
-    let first_publish = event_kind::FIRST_PUBLISH;
+    let publish_from_draft = event_kind::PUBLISH_FROM_DRAFT;
+    let initial_publish = event_kind::INITIAL_PUBLISH;
+    let republish_from_closed = event_kind::REPUBLISH_FROM_CLOSED;
     let sql = format!(
         r#"
         SELECT
@@ -22,7 +23,7 @@ pub(crate) fn query_average_time_to_publish_rows(
         FROM {events_sql}
         WHERE
           dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY'
-          AND event_kind IN ('{create_publish}', '{first_publish}')
+          AND event_kind IN ('{publish_from_draft}', '{initial_publish}', '{republish_from_closed}')
           AND content_created_at IS NOT NULL
           AND content_published_at IS NOT NULL
           AND content_published_at >= content_created_at
@@ -57,23 +58,27 @@ mod tests {
             "CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE)";
         let events_sql = r#"
             (
-              SELECT {current_jst_date} AS dt, 'blogs' AS api, 'CREATE_PUBLISH' AS event_kind,
+              SELECT {current_jst_date} AS dt, 'blogs' AS api, 'INITIAL_PUBLISH' AS event_kind,
                      TIMESTAMP '2026-06-28 00:00:00' AS content_created_at,
                      TIMESTAMP '2026-06-29 12:00:00' AS content_published_at
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'FIRST_PUBLISH',
+              SELECT {current_jst_date}, 'blogs', 'PUBLISH_FROM_DRAFT',
                      TIMESTAMP '2026-06-29 00:00:00',
                      TIMESTAMP '2026-06-29 12:00:00'
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'FIRST_PUBLISH',
+              SELECT {current_jst_date}, 'blogs', 'REPUBLISH_FROM_CLOSED',
+                     TIMESTAMP '2026-06-27 00:00:00',
+                     TIMESTAMP '2026-06-29 12:00:00'
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'PUBLISH_FROM_DRAFT',
                      TIMESTAMP '2026-06-30 00:00:00',
                      TIMESTAMP '2026-06-29 12:00:00'
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'FIRST_PUBLISH',
+              SELECT {current_jst_date}, 'blogs', 'PUBLISH_FROM_DRAFT',
                      NULL::TIMESTAMP,
                      TIMESTAMP '2026-06-29 12:00:00'
               UNION ALL
-              SELECT {current_jst_date}, 'authors', 'CREATE_PUBLISH',
+              SELECT {current_jst_date}, 'authors', 'INITIAL_PUBLISH',
                      TIMESTAMP '2026-06-29 00:00:00',
                      TIMESTAMP '2026-06-29 12:00:00'
             )
@@ -97,13 +102,13 @@ mod tests {
 
         assert_eq!(day_rows.len(), 2);
         assert_eq!(day_rows[0].api.as_deref(), Some("blogs"));
-        assert_eq!(day_rows[0].avg_days, Some(1.0));
+        assert_eq!(day_rows[0].avg_days, Some(1.5));
         assert_eq!(day_rows[0].avg_hours, None);
         assert_eq!(
             serde_json::to_value(&day_rows[0]).unwrap(),
             json!({
                 "api": "blogs",
-                "avg_days": 1.0,
+                "avg_days": 1.5,
                 "avg_hours": null
             })
         );
@@ -114,13 +119,13 @@ mod tests {
         assert_eq!(hour_rows.len(), 2);
         assert_eq!(hour_rows[0].api.as_deref(), Some("blogs"));
         assert_eq!(hour_rows[0].avg_days, None);
-        assert_eq!(hour_rows[0].avg_hours, Some(24.0));
+        assert_eq!(hour_rows[0].avg_hours, Some(36.0));
         assert_eq!(
             serde_json::to_value(&hour_rows[0]).unwrap(),
             json!({
                 "api": "blogs",
                 "avg_days": null,
-                "avg_hours": 24.0
+                "avg_hours": 36.0
             })
         );
         assert_eq!(hour_rows[1].api.as_deref(), Some("authors"));

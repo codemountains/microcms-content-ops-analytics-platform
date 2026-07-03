@@ -8,7 +8,7 @@ pub use config::AppConfig;
 pub use error::ApiError;
 pub use query::{
     ApiActivityRow, AverageDraftToPublishRow, AverageTimeToPublishRow, CalendarHeatmapRow,
-    TopUpdatedContentRow,
+    PublishActionSummaryRow, PublishActionTrendRow, TopUpdatedContentRow,
 };
 
 pub fn try_app(config: AppConfig) -> Result<axum::Router, ApiError> {
@@ -32,6 +32,7 @@ mod tests {
     use crate::query::{
         format_partition_time, query_api_activity_rows, query_average_draft_to_publish_rows,
         query_average_time_to_publish_rows, query_calendar_heatmap_rows,
+        query_publish_action_summary_rows, query_publish_action_trend_rows,
         query_top_updated_contents_rows,
     };
     use crate::storage::{DuckDbEngine, sql_string_literal};
@@ -80,7 +81,7 @@ mod tests {
                     'example-service' AS service,
                     'blogs' AS api,
                     'content-1' AS content_id,
-                    'FIRST_PUBLISH' AS event_kind,
+                    'PUBLISH_FROM_DRAFT' AS event_kind,
                     'edit' AS event_type,
                     'DRAFT' AS old_status,
                     'PUBLISH' AS new_status,
@@ -96,7 +97,7 @@ mod tests {
                     'example-service',
                     'blogs',
                     'content-1',
-                    'CREATE_DRAFT',
+                    'INITIAL_DRAFT',
                     'new',
                     NULL,
                     'DRAFT',
@@ -112,7 +113,7 @@ mod tests {
                     'example-service',
                     'blogs',
                     'content-1',
-                    'UPDATE_PUBLISH',
+                    'UPDATE_PUBLISHED',
                     'edit',
                     'PUBLISH',
                     'PUBLISH',
@@ -160,10 +161,10 @@ mod tests {
                     'example-service',
                     'blogs',
                     NULL,
-                    'UNPUBLISH',
+                    'ADD_DRAFT_TO_PUBLISHED',
                     'edit',
                     'PUBLISH',
-                    'DRAFT',
+                    'DRAFT,PUBLISH',
                     TIMESTAMP '{event_date} 14:45:00',
                     TIMESTAMP '{event_date} 15:45:00',
                     NULL,
@@ -176,12 +177,28 @@ mod tests {
                     'example-service',
                     'blogs',
                     NULL,
+                    'DISCARD_DRAFT_ON_PUBLISHED',
+                    'edit',
+                    'DRAFT,PUBLISH',
+                    'PUBLISH',
+                    TIMESTAMP '{event_date} 15:45:00',
+                    TIMESTAMP '{event_date} 16:00:00',
+                    NULL,
+                    NULL,
+                    NULL,
+                    '{{}}'
+                  UNION ALL
+                  SELECT
+                    TIMESTAMP '{event_date} 16:30:00',
+                    'example-service',
+                    'blogs',
+                    NULL,
                     NULL,
                     'edit',
                     NULL,
                     NULL,
                     NULL,
-                    TIMESTAMP '{event_date} 16:00:00',
+                    TIMESTAMP '{event_date} 16:30:00',
                     NULL,
                     NULL,
                     NULL,
@@ -192,7 +209,7 @@ mod tests {
                     'example-service',
                     'blogs',
                     'content-2',
-                    'CREATE_PUBLISH',
+                    'INITIAL_PUBLISH',
                     'new',
                     NULL,
                     'PUBLISH',
@@ -210,7 +227,7 @@ mod tests {
                     'example-service' AS service,
                     'authors' AS api,
                     NULL AS content_id,
-                    'DELETE' AS event_kind,
+                    'DELETE_PUBLISHED' AS event_kind,
                     'delete' AS event_type,
                     'PUBLISH' AS old_status,
                     NULL AS new_status,
@@ -243,7 +260,15 @@ mod tests {
             .from_utc_datetime(&today.and_hms_opt(23, 59, 59).unwrap())
             .timestamp_millis();
 
-        let (calendar, activity, top_contents, publish_duration, draft_duration) = engine
+        let (
+            calendar,
+            activity,
+            top_contents,
+            publish_duration,
+            draft_duration,
+            publish_summary,
+            publish_trend,
+        ) = engine
             .query(move |connection, events_sql| {
                 Ok((
                     query_calendar_heatmap_rows(connection, events_sql, from_ms, to_ms)?,
@@ -261,6 +286,8 @@ mod tests {
                         4,
                         PublishDurationUnit::Days,
                     )?,
+                    query_publish_action_summary_rows(connection, events_sql, 4)?,
+                    query_publish_action_trend_rows(connection, events_sql, from_ms, to_ms)?,
                 ))
             })
             .await
@@ -270,21 +297,28 @@ mod tests {
             row.time == format_partition_time(&zero_date.to_string()) && row.value == 0
         }));
         assert!(calendar.iter().any(|row| {
-            row.time == format_partition_time(&event_date.to_string()) && row.value == 9
+            row.time == format_partition_time(&event_date.to_string()) && row.value == 10
         }));
 
         assert_eq!(activity.len(), 2);
         assert_eq!(activity[0].api.as_deref(), Some("blogs"));
-        assert_eq!(activity[0].create_draft_count, 1);
-        assert_eq!(activity[0].create_publish_count, 1);
-        assert_eq!(activity[0].first_publish_count, 1);
-        assert_eq!(activity[0].update_publish_count, 1);
+        assert_eq!(activity[0].initial_draft_count, 1);
+        assert_eq!(activity[0].save_draft_count, 0);
+        assert_eq!(activity[0].publish_from_draft_count, 1);
+        assert_eq!(activity[0].initial_publish_count, 1);
+        assert_eq!(activity[0].update_published_count, 1);
+        assert_eq!(activity[0].add_draft_to_published_count, 1);
+        assert_eq!(activity[0].discard_draft_on_published_count, 1);
         assert_eq!(activity[0].unpublish_to_draft_count, 1);
         assert_eq!(activity[0].unpublish_to_closed_count, 1);
-        assert_eq!(activity[0].delete_count, 0);
-        assert_eq!(activity[0].total_count, 8);
+        assert_eq!(activity[0].reopen_to_draft_count, 0);
+        assert_eq!(activity[0].republish_from_closed_count, 0);
+        assert_eq!(activity[0].delete_draft_count, 0);
+        assert_eq!(activity[0].delete_published_count, 0);
+        assert_eq!(activity[0].delete_closed_count, 0);
+        assert_eq!(activity[0].total_count, 9);
         assert_eq!(activity[1].api.as_deref(), Some("authors"));
-        assert_eq!(activity[1].delete_count, 1);
+        assert_eq!(activity[1].delete_published_count, 1);
         assert_eq!(activity[1].total_count, 1);
 
         assert_eq!(top_contents.len(), 2);
@@ -307,6 +341,19 @@ mod tests {
         assert_eq!(draft_duration[0].avg_days, Some(5.0));
         assert_eq!(draft_duration[0].avg_hours, None);
         assert_eq!(draft_duration[0].sample_count, 1);
+
+        assert_eq!(publish_summary.len(), 1);
+        assert_eq!(publish_summary[0].publish_count, 2);
+        assert_eq!(publish_summary[0].total_count, 10);
+        assert_eq!(publish_summary[0].publish_rate, Some(2.0 / 10.0));
+
+        assert!(publish_trend.iter().any(|row| {
+            row.time == format_partition_time(&event_date.to_string())
+                && row.publish_from_draft_count == 1
+                && row.initial_publish_count == 1
+                && row.republish_from_closed_count == 0
+                && row.publish_count == 2
+        }));
     }
 
     #[tokio::test]

@@ -92,6 +92,319 @@
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.0.0",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "duckdb-query-api"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "root_selector": "$",
+          "url": "/metrics/publish-action-summary",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "days",
+                "value": "1"
+              }
+            ],
+            "data": ""
+          },
+          "columns": [
+            {
+              "selector": "publish_count",
+              "text": "publish_count",
+              "type": "number"
+            }
+          ],
+          "data": "",
+          "filters": [],
+          "global_query_id": ""
+        }
+      ],
+      "title": "Today Publish Count",
+      "description": "今日の PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED の合計数を表示します。日付境界は JST の dt partition に揃えます。",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "duckdb-query-api"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "min": 0,
+          "max": 1,
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.25
+              },
+              {
+                "color": "green",
+                "value": 0.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 7,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.0.0",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "duckdb-query-api"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "root_selector": "$",
+          "url": "/metrics/publish-action-summary",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "days",
+                "value": "1"
+              }
+            ],
+            "data": ""
+          },
+          "columns": [
+            {
+              "selector": "publish_rate",
+              "text": "publish_rate",
+              "type": "number"
+            }
+          ],
+          "data": "",
+          "filters": [],
+          "global_query_id": ""
+        }
+      ],
+      "title": "Publish Rate",
+      "description": "今日の全イベント数に対する公開アクション（PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED）の割合を表示します。イベントが 0 件の場合は null です。",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "duckdb-query-api"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.0.0",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "duckdb-query-api"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "root_selector": "$",
+          "url": "/metrics/publish-action-trend",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "from",
+                "value": "${__timeFrom}"
+              },
+              {
+                "key": "to",
+                "value": "${__timeTo}"
+              }
+            ],
+            "data": ""
+          },
+          "columns": [
+            {
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "publish_from_draft_count",
+              "text": "publish_from_draft",
+              "type": "number"
+            },
+            {
+              "selector": "initial_publish_count",
+              "text": "initial_publish",
+              "type": "number"
+            },
+            {
+              "selector": "republish_from_closed_count",
+              "text": "republish_from_closed",
+              "type": "number"
+            }
+          ],
+          "data": "",
+          "filters": [],
+          "global_query_id": ""
+        }
+      ],
+      "title": "Publish Action Trend",
+      "description": "日別の PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED 件数を stacked bar で表示します。ダッシュボードの time range を JST 日付でゼロ埋めします。",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "duckdb-query-api"
+      },
+      "fieldConfig": {
         "defaults": {},
         "overrides": []
       },
@@ -99,7 +412,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 22
       },
       "id": 2,
       "options": {
@@ -146,23 +459,38 @@
               "type": "string"
             },
             {
-              "selector": "create_draft_count",
-              "text": "create_draft",
+              "selector": "initial_draft_count",
+              "text": "initial_draft",
               "type": "number"
             },
             {
-              "selector": "create_publish_count",
-              "text": "create_publish",
+              "selector": "save_draft_count",
+              "text": "save_draft",
               "type": "number"
             },
             {
-              "selector": "first_publish_count",
-              "text": "first_publish",
+              "selector": "publish_from_draft_count",
+              "text": "publish_from_draft",
               "type": "number"
             },
             {
-              "selector": "update_publish_count",
-              "text": "update_publish",
+              "selector": "initial_publish_count",
+              "text": "initial_publish",
+              "type": "number"
+            },
+            {
+              "selector": "update_published_count",
+              "text": "update_published",
+              "type": "number"
+            },
+            {
+              "selector": "add_draft_to_published_count",
+              "text": "add_draft_to_published",
+              "type": "number"
+            },
+            {
+              "selector": "discard_draft_on_published_count",
+              "text": "discard_draft_on_published",
               "type": "number"
             },
             {
@@ -176,8 +504,28 @@
               "type": "number"
             },
             {
-              "selector": "delete_count",
-              "text": "delete",
+              "selector": "reopen_to_draft_count",
+              "text": "reopen_to_draft",
+              "type": "number"
+            },
+            {
+              "selector": "republish_from_closed_count",
+              "text": "republish_from_closed",
+              "type": "number"
+            },
+            {
+              "selector": "delete_draft_count",
+              "text": "delete_draft",
+              "type": "number"
+            },
+            {
+              "selector": "delete_published_count",
+              "text": "delete_published",
+              "type": "number"
+            },
+            {
+              "selector": "delete_closed_count",
+              "text": "delete_closed",
               "type": "number"
             }
           ],
@@ -187,20 +535,27 @@
         }
       ],
       "title": "API Activity",
-      "description": "API ごとの event_kind 別件数（直近 30 日）。create_draft / create_publish / first_publish / update_publish / unpublish_to_draft / unpublish_to_closed / delete を stacked bar で表示します。",
+      "description": "API ごとの event_kind 別件数（直近 30 日）。新しい詳細 event_kind 14 種を stacked bar で表示します。",
       "transformations": [
         {
           "id": "organize",
           "options": {
             "indexByName": {
               "api": 0,
-              "create_draft": 1,
-              "create_publish": 2,
-              "first_publish": 3,
-              "update_publish": 4,
-              "unpublish_to_draft": 5,
-              "unpublish_to_closed": 6,
-              "delete": 7
+              "initial_draft": 1,
+              "save_draft": 2,
+              "publish_from_draft": 3,
+              "initial_publish": 4,
+              "update_published": 5,
+              "add_draft_to_published": 6,
+              "discard_draft_on_published": 7,
+              "unpublish_to_draft": 8,
+              "unpublish_to_closed": 9,
+              "reopen_to_draft": 10,
+              "republish_from_closed": 11,
+              "delete_draft": 12,
+              "delete_published": 13,
+              "delete_closed": 14
             }
           }
         }
@@ -233,7 +588,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 22
       },
       "id": 3,
       "options": {
@@ -388,7 +743,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 31
       },
       "id": 4,
       "options": {
@@ -454,7 +809,7 @@
         }
       ],
       "title": "Average Time to Publish by API",
-      "description": "API ごとに、コンテンツ作成（publishValue.createdAt）から初回公開（publishValue.publishedAt）までの平均所要時間を表示します。CREATE_PUBLISH と FIRST_PUBLISH を対象（直近 30 日）にし、publish_duration_unit で日数 / 時間を切り替えます。",
+      "description": "API ごとに、コンテンツ作成（publishValue.createdAt）から公開到達（publishValue.publishedAt）までの平均所要時間を表示します。PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED を対象（直近 30 日）にし、publish_duration_unit で日数 / 時間を切り替えます。",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -545,7 +900,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 31
       },
       "id": 5,
       "options": {
@@ -611,7 +966,7 @@
         }
       ],
       "title": "Average Draft to Publish by API",
-      "description": "API ごとに、下書き作成（draftValue.createdAt）から初回公開（publishValue.publishedAt）までの平均所要時間を表示します。同一 api / content_id の CREATE_DRAFT と FIRST_PUBLISH を結合し、CREATE_PUBLISH は含めません。期間フィルタは FIRST_PUBLISH 側の dt に適用します（直近 30 日）。",
+      "description": "API ごとに、下書き作成（draftValue.createdAt）から下書き経由公開（publishValue.publishedAt）までの平均所要時間を表示します。同一 api / content_id の INITIAL_DRAFT と PUBLISH_FROM_DRAFT を結合します。期間フィルタは PUBLISH_FROM_DRAFT 側の dt に適用します（直近 30 日）。",
       "transformations": [
         {
           "id": "filterFieldsByName",

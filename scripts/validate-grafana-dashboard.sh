@@ -112,6 +112,56 @@ run_jq "Calendar Heatmap panel wiring" -e '
     )
 '
 
+run_jq "publish KPI panels are placed below Calendar Heatmap" -e '
+  (.panels[] | select(.title == "Today Publish Count") | .type == "stat" and .gridPos == {"h":5,"w":12,"x":0,"y":9})
+    and (.panels[] | select(.title == "Publish Rate") | .type == "gauge" and .gridPos == {"h":5,"w":12,"x":12,"y":9})
+    and (.panels[] | select(.title == "Publish Action Trend") | .type == "timeseries" and .gridPos == {"h":8,"w":24,"x":0,"y":14})
+'
+
+run_jq "Today Publish Count panel wiring" -e '
+  .panels[]
+  | select(.title == "Today Publish Count")
+  | .targets[]
+  | select(.url == "/metrics/publish-action-summary")
+  | select((.url_options.params // []) == [{"key":"days","value":"1"}])
+  | .columns[]
+  | select(.selector == "publish_count" and .text == "publish_count" and .type == "number")
+'
+
+run_jq "Publish Rate panel wiring" -e '
+  .panels[]
+  | select(.title == "Publish Rate")
+  | select(.fieldConfig.defaults.unit == "percentunit")
+  | .targets[]
+  | select(.url == "/metrics/publish-action-summary")
+  | select((.url_options.params // []) == [{"key":"days","value":"1"}])
+  | .columns[]
+  | select(.selector == "publish_rate" and .text == "publish_rate" and .type == "number")
+'
+
+run_jq "Publish Action Trend panel wiring" -e '
+  .panels[]
+  | select(.title == "Publish Action Trend")
+  | select(.fieldConfig.defaults.custom.drawStyle == "bars")
+  | select(.fieldConfig.defaults.custom.stacking.mode == "normal")
+  | .targets[]
+  | select(.url == "/metrics/publish-action-trend")
+  | select((.url_options.params // []) == [
+      {"key":"from","value":"${__timeFrom}"},
+      {"key":"to","value":"${__timeTo}"}
+    ])
+  | [.columns[] | {selector, text, type}] as $fields
+  | all(
+      [
+        {"selector":"time","text":"time","type":"timestamp"},
+        {"selector":"publish_from_draft_count","text":"publish_from_draft","type":"number"},
+        {"selector":"initial_publish_count","text":"initial_publish","type":"number"},
+        {"selector":"republish_from_closed_count","text":"republish_from_closed","type":"number"}
+      ][];
+      . as $required | $fields | index($required)
+    )
+'
+
 run_jq "API Activity field mappings" -e '
   .panels[]
   | select(.title == "API Activity")
@@ -122,13 +172,20 @@ run_jq "API Activity field mappings" -e '
   | all(
       [
         {"selector":"api","text":"api","type":"string"},
-        {"selector":"create_draft_count","text":"create_draft","type":"number"},
-        {"selector":"create_publish_count","text":"create_publish","type":"number"},
-        {"selector":"first_publish_count","text":"first_publish","type":"number"},
-        {"selector":"update_publish_count","text":"update_publish","type":"number"},
+        {"selector":"initial_draft_count","text":"initial_draft","type":"number"},
+        {"selector":"save_draft_count","text":"save_draft","type":"number"},
+        {"selector":"publish_from_draft_count","text":"publish_from_draft","type":"number"},
+        {"selector":"initial_publish_count","text":"initial_publish","type":"number"},
+        {"selector":"update_published_count","text":"update_published","type":"number"},
+        {"selector":"add_draft_to_published_count","text":"add_draft_to_published","type":"number"},
+        {"selector":"discard_draft_on_published_count","text":"discard_draft_on_published","type":"number"},
         {"selector":"unpublish_to_draft_count","text":"unpublish_to_draft","type":"number"},
         {"selector":"unpublish_to_closed_count","text":"unpublish_to_closed","type":"number"},
-        {"selector":"delete_count","text":"delete","type":"number"}
+        {"selector":"reopen_to_draft_count","text":"reopen_to_draft","type":"number"},
+        {"selector":"republish_from_closed_count","text":"republish_from_closed","type":"number"},
+        {"selector":"delete_draft_count","text":"delete_draft","type":"number"},
+        {"selector":"delete_published_count","text":"delete_published","type":"number"},
+        {"selector":"delete_closed_count","text":"delete_closed","type":"number"}
       ][];
       . as $required | $fields | index($required)
     )
@@ -143,13 +200,20 @@ run_jq "API Activity series order transformation" -e '
       "options": {
         "indexByName": {
           "api": 0,
-          "create_draft": 1,
-          "create_publish": 2,
-          "first_publish": 3,
-          "update_publish": 4,
-          "unpublish_to_draft": 5,
-          "unpublish_to_closed": 6,
-          "delete": 7
+          "initial_draft": 1,
+          "save_draft": 2,
+          "publish_from_draft": 3,
+          "initial_publish": 4,
+          "update_published": 5,
+          "add_draft_to_published": 6,
+          "discard_draft_on_published": 7,
+          "unpublish_to_draft": 8,
+          "unpublish_to_closed": 9,
+          "reopen_to_draft": 10,
+          "republish_from_closed": 11,
+          "delete_draft": 12,
+          "delete_published": 13,
+          "delete_closed": 14
         }
       }
     }])

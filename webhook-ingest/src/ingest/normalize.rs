@@ -84,7 +84,7 @@ pub fn normalize_payload(
 
 #[cfg(test)]
 mod tests {
-    use super::event_kind::{EVENT_KIND_CREATE_DRAFT, EVENT_KIND_FIRST_PUBLISH};
+    use super::event_kind::{EVENT_KIND_INITIAL_DRAFT, EVENT_KIND_PUBLISH_FROM_DRAFT};
     use super::*;
 
     fn sample_body() -> &'static [u8] {
@@ -166,7 +166,10 @@ mod tests {
 
         assert_eq!(event.old_status.as_deref(), Some("DRAFT"));
         assert_eq!(event.new_status.as_deref(), Some("PUBLISH"));
-        assert_eq!(event.event_kind.as_deref(), Some(EVENT_KIND_FIRST_PUBLISH));
+        assert_eq!(
+            event.event_kind.as_deref(),
+            Some(EVENT_KIND_PUBLISH_FROM_DRAFT)
+        );
         assert_eq!(
             event.content_created_at.unwrap().to_rfc3339(),
             "2026-06-27T12:00:00+00:00"
@@ -202,7 +205,7 @@ mod tests {
         }"#;
         let event = normalize_payload(body, received_at).unwrap();
 
-        assert_eq!(event.event_kind.as_deref(), Some(EVENT_KIND_CREATE_DRAFT));
+        assert_eq!(event.event_kind.as_deref(), Some(EVENT_KIND_INITIAL_DRAFT));
         assert_eq!(
             event.draft_created_at.unwrap().to_rfc3339(),
             "2026-06-27T12:00:00+00:00"
@@ -215,19 +218,37 @@ mod tests {
             .unwrap()
             .with_timezone(&Utc);
         let cases = [
-            ("new", None, Some(r#"["DRAFT"]"#), Some("CREATE_DRAFT")),
-            ("new", None, Some(r#"["PUBLISH"]"#), Some("CREATE_PUBLISH")),
+            ("new", None, Some(r#"["DRAFT"]"#), Some("INITIAL_DRAFT")),
+            ("new", None, Some(r#"["PUBLISH"]"#), Some("INITIAL_PUBLISH")),
+            (
+                "edit",
+                Some(r#"["DRAFT"]"#),
+                Some(r#"["DRAFT"]"#),
+                Some("SAVE_DRAFT"),
+            ),
             (
                 "edit",
                 Some(r#"["DRAFT"]"#),
                 Some(r#"["PUBLISH"]"#),
-                Some("FIRST_PUBLISH"),
+                Some("PUBLISH_FROM_DRAFT"),
             ),
             (
                 "edit",
                 Some(r#"["PUBLISH"]"#),
                 Some(r#"["PUBLISH"]"#),
-                Some("UPDATE_PUBLISH"),
+                Some("UPDATE_PUBLISHED"),
+            ),
+            (
+                "edit",
+                Some(r#"["PUBLISH"]"#),
+                Some(r#"["PUBLISH","DRAFT"]"#),
+                Some("ADD_DRAFT_TO_PUBLISHED"),
+            ),
+            (
+                "edit",
+                Some(r#"["PUBLISH","DRAFT"]"#),
+                Some(r#"["PUBLISH"]"#),
+                Some("DISCARD_DRAFT_ON_PUBLISHED"),
             ),
             (
                 "edit",
@@ -241,8 +262,32 @@ mod tests {
                 Some(r#"["CLOSED"]"#),
                 Some("UNPUBLISH_TO_CLOSED"),
             ),
-            ("delete", Some(r#"["PUBLISH"]"#), None, Some("DELETE")),
-            ("edit", Some(r#"["DRAFT"]"#), Some(r#"["DRAFT"]"#), None),
+            (
+                "edit",
+                Some(r#"["CLOSED"]"#),
+                Some(r#"["DRAFT"]"#),
+                Some("REOPEN_TO_DRAFT"),
+            ),
+            (
+                "edit",
+                Some(r#"["CLOSED"]"#),
+                Some(r#"["PUBLISH"]"#),
+                Some("REPUBLISH_FROM_CLOSED"),
+            ),
+            ("delete", Some(r#"["DRAFT"]"#), None, Some("DELETE_DRAFT")),
+            (
+                "delete",
+                Some(r#"["PUBLISH"]"#),
+                None,
+                Some("DELETE_PUBLISHED"),
+            ),
+            (
+                "delete",
+                Some(r#"["PUBLISH","DRAFT"]"#),
+                None,
+                Some("DELETE_PUBLISHED"),
+            ),
+            ("delete", Some(r#"["CLOSED"]"#), None, Some("DELETE_CLOSED")),
             (
                 "edit",
                 Some(r#"["PUBLISH"]"#),

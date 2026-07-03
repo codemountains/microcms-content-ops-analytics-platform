@@ -12,8 +12,8 @@ pub(crate) fn query_average_draft_to_publish_rows(
 ) -> duckdb::Result<Vec<AverageDraftToPublishRow>> {
     let days_minus_one = days - 1;
     let (divisor, value_column) = unit.sql_parts();
-    let create_draft = event_kind::CREATE_DRAFT;
-    let first_publish = event_kind::FIRST_PUBLISH;
+    let initial_draft = event_kind::INITIAL_DRAFT;
+    let publish_from_draft = event_kind::PUBLISH_FROM_DRAFT;
     let sql = format!(
         r#"
         WITH drafts AS (
@@ -23,7 +23,7 @@ pub(crate) fn query_average_draft_to_publish_rows(
             MIN(draft_created_at) AS draft_at
           FROM {events_sql}
           WHERE
-            event_kind = '{create_draft}'
+            event_kind = '{initial_draft}'
             AND content_id IS NOT NULL
             AND draft_created_at IS NOT NULL
           GROUP BY api, content_id
@@ -36,7 +36,7 @@ pub(crate) fn query_average_draft_to_publish_rows(
           FROM {events_sql}
           WHERE
             dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY'
-            AND event_kind = '{first_publish}'
+            AND event_kind = '{publish_from_draft}'
             AND content_id IS NOT NULL
             AND content_published_at IS NOT NULL
           GROUP BY api, content_id
@@ -82,41 +82,44 @@ mod tests {
         let events_sql = r#"
             (
               SELECT {current_jst_date} AS dt, 'blogs' AS api, 'content-1' AS content_id,
-                     'CREATE_DRAFT' AS event_kind, TIMESTAMP '2026-06-24 00:00:00' AS draft_created_at,
+                     'INITIAL_DRAFT' AS event_kind, TIMESTAMP '2026-06-24 00:00:00' AS draft_created_at,
                      NULL::TIMESTAMP AS content_published_at
               UNION ALL
               SELECT {current_jst_date}, 'blogs', 'content-1',
-                     'FIRST_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+                     'PUBLISH_FROM_DRAFT', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
               UNION ALL
               SELECT {current_jst_date}, 'blogs', 'content-2',
-                     'CREATE_DRAFT', TIMESTAMP '2026-06-27 00:00:00', NULL::TIMESTAMP
+                     'INITIAL_DRAFT', TIMESTAMP '2026-06-27 00:00:00', NULL::TIMESTAMP
               UNION ALL
               SELECT {current_jst_date}, 'blogs', 'content-2',
-                     'FIRST_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+                     'PUBLISH_FROM_DRAFT', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
               UNION ALL
               SELECT {current_jst_date}, 'blogs', 'draft-only',
-                     'CREATE_DRAFT', TIMESTAMP '2026-06-26 00:00:00', NULL::TIMESTAMP
+                     'INITIAL_DRAFT', TIMESTAMP '2026-06-26 00:00:00', NULL::TIMESTAMP
+              UNION ALL
+              SELECT {current_jst_date}, 'blogs', 'saved-draft-only',
+                     'SAVE_DRAFT', TIMESTAMP '2026-06-26 00:00:00', NULL::TIMESTAMP
               UNION ALL
               SELECT {current_jst_date}, 'blogs', 'instant-publish',
-                     'CREATE_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+                     'INITIAL_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
               UNION ALL
               SELECT {current_jst_date} - INTERVAL '40 DAY',
-                     'blogs', 'outside-period', 'FIRST_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+                     'blogs', 'outside-period', 'PUBLISH_FROM_DRAFT', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
               UNION ALL
               SELECT {current_jst_date}, 'blogs', 'outside-period',
-                     'CREATE_DRAFT', TIMESTAMP '2026-06-27 00:00:00', NULL::TIMESTAMP
+                     'INITIAL_DRAFT', TIMESTAMP '2026-06-27 00:00:00', NULL::TIMESTAMP
               UNION ALL
               SELECT {current_jst_date}, 'blogs', 'negative-lead',
-                     'CREATE_DRAFT', TIMESTAMP '2026-06-30 00:00:00', NULL::TIMESTAMP
+                     'INITIAL_DRAFT', TIMESTAMP '2026-06-30 00:00:00', NULL::TIMESTAMP
               UNION ALL
               SELECT {current_jst_date}, 'blogs', 'negative-lead',
-                     'FIRST_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+                     'PUBLISH_FROM_DRAFT', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
               UNION ALL
               SELECT {current_jst_date}, 'authors', 'author-1',
-                     'CREATE_DRAFT', TIMESTAMP '2026-06-28 00:00:00', NULL::TIMESTAMP
+                     'INITIAL_DRAFT', TIMESTAMP '2026-06-28 00:00:00', NULL::TIMESTAMP
               UNION ALL
               SELECT {current_jst_date}, 'authors', 'author-1',
-                     'FIRST_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
+                     'PUBLISH_FROM_DRAFT', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
             )
         "#
         .replace("{current_jst_date}", current_jst_date);
