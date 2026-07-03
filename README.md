@@ -78,11 +78,14 @@ microcms-content-ops-analytics/
 | 指標 | 目的 |
 | --- | --- |
 | 日別 Webhook 件数 | コンテンツ更新量の推移を見る |
+| 今日の公開数 | 当日の公開・再公開アクション件数を見る |
+| 公開率 | 当日の全イベントに対する公開アクション比率を見る |
+| 公開アクション数の推移 | 公開・再公開アクションの流れを見る |
 | API 別イベント件数 | どのコンテンツ種別が活発かを見る |
-| イベント種別別件数 | 作成・編集・削除の比率を見る |
+| イベント種別別件数 | API ごとの `event_kind` 件数を見る |
 | 編集回数が多いコンテンツ | 運用負荷が高い記事を見つける |
-| ステータス別イベント数 | 下書き・公開・非公開などの状態変化を見る |
-| 下書き作成から初回公開までの平均所要日数 | 下書き運用のリードタイムを見る |
+| 公開状態遷移別イベント数 | 14 種の公開状態遷移を見る |
+| 下書き作成から公開までの平均所要日数 | 下書き運用のリードタイムを見る |
 
 ## S3 保存形式
 
@@ -111,7 +114,7 @@ s3://<bucket>/microcms_events/
 | `api` | string | microCMS の API ID |
 | `content_id` | string | コンテンツ ID |
 | `event_type` | string | microCMS Webhook の `type` (`new` / `edit` / `delete`) |
-| `event_kind` | string | 公開状態の変化を加味した分析用イベント分類（例: `CREATE_DRAFT`, `UNPUBLISH_TO_DRAFT`, `UNPUBLISH_TO_CLOSED`） |
+| `event_kind` | string | 公開状態の変化を加味した分析用イベント分類（例: `INITIAL_DRAFT`, `PUBLISH_FROM_DRAFT`, `DISCARD_DRAFT_ON_PUBLISHED`） |
 | `old_status` | string | 変更前ステータス |
 | `new_status` | string | 変更後ステータス |
 | `old_updated_at` | timestamp | 変更前コンテンツの更新日時 |
@@ -149,6 +152,8 @@ s3://<bucket>/microcms_events/
 ```text
 GET /health
 GET /metrics/calendar-heatmap
+GET /metrics/publish-action-summary
+GET /metrics/publish-action-trend
 GET /metrics/api-activity
 GET /metrics/top-updated-contents
 GET /metrics/average-time-to-publish-by-api
@@ -280,7 +285,7 @@ GitHub Actions の `uses:` は supply-chain risk を抑えるため、tag では
 | `just debug` | Floci/ngrok/Grafana を使うローカルデバッグ環境を起動 |
 | `just debug-webhook` | ローカル API Gateway に署名付き sample webhook を送信 |
 | `just debug-parquet-seed` | smoke 用ダミー Parquet を生成し、ローカル `microcms_events/` をクリアしたうえで Floci S3 に `--delete` sync |
-| `just debug-parquet-seed-large` | 1 年分（既定 10,000 件 / 365 日）の bulk ダミー Parquet を生成し、Floci S3 に `--delete` sync |
+| `just debug-parquet-seed-large` | 1 年分（既定 50,000 件 / 365 日）の bulk ダミー Parquet を生成し、Floci S3 に `--delete` sync |
 | `just debug-parquet-persist` | Floci S3 の debug Parquet を `.debug/parquet/` に保存 |
 | `just debug-parquet-delete` | debug で生成した Parquet を削除 |
 | `just debug-metrics` | Query API の health/metrics を確認 |
@@ -304,10 +309,12 @@ docker compose up --build
 | --- | --- |
 | `http://localhost:8000/health` | DuckDB Query API の health check |
 | `http://localhost:8000/metrics/calendar-heatmap` | Calendar Heatmap 用の日別イベント件数 |
+| `http://localhost:8000/metrics/publish-action-summary` | 今日の公開数 / 公開率 |
+| `http://localhost:8000/metrics/publish-action-trend` | 日別の公開アクション数 |
 | `http://localhost:8000/metrics/api-activity` | API ごとの `event_kind` 別件数 |
 | `http://localhost:8000/metrics/top-updated-contents` | 更新回数が多いコンテンツ |
 | `http://localhost:8000/metrics/average-time-to-publish-by-api` | API ごとの平均公開所要日数 / 時間 |
-| `http://localhost:8000/metrics/average-draft-to-publish-by-api` | API ごとの下書き作成から初回公開までの平均所要日数 / 時間 |
+| `http://localhost:8000/metrics/average-draft-to-publish-by-api` | API ごとの下書き作成から公開までの平均所要日数 / 時間 |
 | `http://localhost:3000` | Grafana |
 
 ## OpenTofu / ローカルデバッグ

@@ -22,7 +22,7 @@ fn main() -> ExitCode {
 fn run() -> Result<DebugSeedSummary, IngestError> {
     let mut preset = DebugSeedPreset::Smoke;
     let mut output_dir = PathBuf::from(".debug/parquet");
-    let mut count = 10_000;
+    let mut count = 50_000;
     let mut days = 365;
     let mut contents = 200;
     let mut rows_per_file = 500;
@@ -119,7 +119,7 @@ Usage:
 Options:
   --output-dir <path>     Output directory (default: .debug/parquet)
   --preset <name>         smoke (8 handler-compatible files) or bulk (default: smoke)
-  --count <n>             Bulk event count (default: 10000)
+  --count <n>             Bulk event count (default: 50000)
   --days <n>              Bulk JST day span, inclusive (default: 365)
   --contents <n>          Bulk unique content IDs (default: 200)
   --rows-per-file <n>     Bulk rows per batched parquet file (default: 500)

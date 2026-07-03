@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveTime, TimeZone, Utc};
 
 use crate::{
     IngestError, NormalizedEvent, build_s3_key, event_to_parquet, events_to_parquet,
@@ -11,24 +11,35 @@ use crate::{
 
 const EVENT_PREFIX: &str = "microcms_events";
 const SERVICE_ID: &str = "example-service";
-const BULK_APIS: &[&str] = &["blogs", "authors", "news", "categories", "pages"];
-/// Share of calendar days that receive filler events. Remaining days stay at zero in heatmap.
-const BULK_ACTIVE_DAY_DENSITY: f64 = 0.55;
-/// Target API Activity composition for bulk seed data (scaled to sum 100).
-const API_ACTIVITY_WEIGHT_CREATE_DRAFT: u32 = 30;
-const API_ACTIVITY_WEIGHT_CREATE_PUBLISH: u32 = 15;
-const API_ACTIVITY_WEIGHT_FIRST_PUBLISH: u32 = 20;
-const API_ACTIVITY_WEIGHT_UPDATE_PUBLISH: u32 = 25;
-const API_ACTIVITY_WEIGHT_UNPUBLISH_TO_DRAFT: u32 = 5;
-const API_ACTIVITY_WEIGHT_UNPUBLISH_TO_CLOSED: u32 = 2;
-const API_ACTIVITY_WEIGHT_DELETE: u32 = 3;
-const API_ACTIVITY_WEIGHT_TOTAL: u32 = API_ACTIVITY_WEIGHT_CREATE_DRAFT
-    + API_ACTIVITY_WEIGHT_CREATE_PUBLISH
-    + API_ACTIVITY_WEIGHT_FIRST_PUBLISH
-    + API_ACTIVITY_WEIGHT_UPDATE_PUBLISH
-    + API_ACTIVITY_WEIGHT_UNPUBLISH_TO_DRAFT
-    + API_ACTIVITY_WEIGHT_UNPUBLISH_TO_CLOSED
-    + API_ACTIVITY_WEIGHT_DELETE;
+const BULK_APIS: &[&str] = &[
+    "blogs",
+    "authors",
+    "news",
+    "categories",
+    "pages",
+    "advertisements",
+    "tags",
+    "labels",
+    "papers",
+    "cards",
+];
+/// Share of calendar days that receive events in bulk seed data. Remaining days stay at zero.
+const BULK_ACTIVE_DAY_DENSITY: f64 = 0.80;
+const BULK_ACTIVITY_WEIGHT_TOTAL: u32 = 2_000;
+const BULK_WEIGHT_INITIAL_DRAFT: u32 = 400;
+const BULK_WEIGHT_SAVE_DRAFT: u32 = 300;
+const BULK_WEIGHT_PUBLISH_FROM_DRAFT: u32 = 53;
+const BULK_WEIGHT_INITIAL_PUBLISH: u32 = 12;
+const BULK_WEIGHT_UPDATE_PUBLISHED: u32 = 377;
+const BULK_WEIGHT_ADD_DRAFT_TO_PUBLISHED: u32 = 400;
+const BULK_WEIGHT_DISCARD_DRAFT_ON_PUBLISHED: u32 = 100;
+const BULK_WEIGHT_UNPUBLISH_TO_DRAFT: u32 = 160;
+const BULK_WEIGHT_UNPUBLISH_TO_CLOSED: u32 = 80;
+const BULK_WEIGHT_REOPEN_TO_DRAFT: u32 = 20;
+const BULK_WEIGHT_REPUBLISH_FROM_CLOSED: u32 = 8;
+const BULK_WEIGHT_DELETE_DRAFT: u32 = 20;
+const BULK_WEIGHT_DELETE_PUBLISHED: u32 = 60;
+const BULK_WEIGHT_DELETE_CLOSED: u32 = 10;
 const SMOKE_EVENT_IDS: [&str; 8] = [
     "018f1001-0000-7000-8000-000000000001",
     "018f1001-0000-7000-8000-000000000002",
@@ -152,9 +163,9 @@ fn generate_bulk_files(config: &DebugSeedConfig) -> Result<DebugSeedSummary, Ing
     let end_date = jst_today();
     let start_date = end_date - Duration::days(i64::from(config.days - 1));
     let mut rng = SeededRng::new(config.seed);
-    let targets = compute_activity_targets(config.count);
+    let targets = compute_activity_targets(config.count, config.days);
     debug_assert_eq!(targets.total(), config.count);
-    let active_days = build_sparse_active_days(&mut rng, start_date, config.days);
+    let schedule = build_realistic_bulk_day_schedule(&mut rng, start_date, config.days);
     let mut events = Vec::with_capacity(config.count as usize);
     let mut min_dt = None;
     let mut max_dt = None;
@@ -162,7 +173,7 @@ fn generate_bulk_files(config: &DebugSeedConfig) -> Result<DebugSeedSummary, Ing
     generate_bulk_activity_events(
         config,
         &mut rng,
-        &active_days,
+        &schedule,
         &targets,
         &mut events,
         &mut min_dt,
@@ -202,80 +213,114 @@ fn generate_bulk_files(config: &DebugSeedConfig) -> Result<DebugSeedSummary, Ing
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ActivityTargets {
-    create_draft: u32,
-    create_publish: u32,
-    first_publish: u32,
-    update_publish: u32,
+    initial_draft: u32,
+    save_draft: u32,
+    publish_from_draft: u32,
+    initial_publish: u32,
+    update_published: u32,
+    add_draft_to_published: u32,
+    discard_draft_on_published: u32,
     unpublish_to_draft: u32,
     unpublish_to_closed: u32,
-    delete: u32,
+    reopen_to_draft: u32,
+    republish_from_closed: u32,
+    delete_draft: u32,
+    delete_published: u32,
+    delete_closed: u32,
 }
 
 impl ActivityTargets {
     fn total(self) -> u32 {
-        self.create_draft
-            + self.create_publish
-            + self.first_publish
-            + self.update_publish
+        self.initial_draft
+            + self.save_draft
+            + self.publish_from_draft
+            + self.initial_publish
+            + self.update_published
+            + self.add_draft_to_published
+            + self.discard_draft_on_published
             + self.unpublish_to_draft
             + self.unpublish_to_closed
-            + self.delete
+            + self.reopen_to_draft
+            + self.republish_from_closed
+            + self.delete_draft
+            + self.delete_published
+            + self.delete_closed
     }
 }
 
-fn compute_activity_targets(total: u32) -> ActivityTargets {
+fn compute_activity_targets(total: u32, _days: u32) -> ActivityTargets {
     let weights = [
-        API_ACTIVITY_WEIGHT_CREATE_DRAFT,
-        API_ACTIVITY_WEIGHT_CREATE_PUBLISH,
-        API_ACTIVITY_WEIGHT_FIRST_PUBLISH,
-        API_ACTIVITY_WEIGHT_UPDATE_PUBLISH,
-        API_ACTIVITY_WEIGHT_UNPUBLISH_TO_DRAFT,
-        API_ACTIVITY_WEIGHT_UNPUBLISH_TO_CLOSED,
-        API_ACTIVITY_WEIGHT_DELETE,
+        BULK_WEIGHT_INITIAL_DRAFT,
+        BULK_WEIGHT_SAVE_DRAFT,
+        BULK_WEIGHT_PUBLISH_FROM_DRAFT,
+        BULK_WEIGHT_INITIAL_PUBLISH,
+        BULK_WEIGHT_UPDATE_PUBLISHED,
+        BULK_WEIGHT_ADD_DRAFT_TO_PUBLISHED,
+        BULK_WEIGHT_DISCARD_DRAFT_ON_PUBLISHED,
+        BULK_WEIGHT_UNPUBLISH_TO_DRAFT,
+        BULK_WEIGHT_UNPUBLISH_TO_CLOSED,
+        BULK_WEIGHT_REOPEN_TO_DRAFT,
+        BULK_WEIGHT_REPUBLISH_FROM_CLOSED,
+        BULK_WEIGHT_DELETE_DRAFT,
+        BULK_WEIGHT_DELETE_PUBLISHED,
+        BULK_WEIGHT_DELETE_CLOSED,
     ];
-    let mut counts = [0_u32; 7];
+    let mut counts = [0_u32; 14];
     let mut assigned = 0_u32;
     for (index, weight) in weights.into_iter().enumerate() {
-        counts[index] = total * weight / API_ACTIVITY_WEIGHT_TOTAL;
+        counts[index] = total * weight / BULK_ACTIVITY_WEIGHT_TOTAL;
         assigned += counts[index];
     }
-    counts[6] += total.saturating_sub(assigned);
+    counts[13] += total.saturating_sub(assigned);
 
     ActivityTargets {
-        create_draft: counts[0],
-        create_publish: counts[1],
-        first_publish: counts[2],
-        update_publish: counts[3],
-        unpublish_to_draft: counts[4],
-        unpublish_to_closed: counts[5],
-        delete: counts[6],
+        initial_draft: counts[0],
+        save_draft: counts[1],
+        publish_from_draft: counts[2],
+        initial_publish: counts[3],
+        update_published: counts[4],
+        add_draft_to_published: counts[5],
+        discard_draft_on_published: counts[6],
+        unpublish_to_draft: counts[7],
+        unpublish_to_closed: counts[8],
+        reopen_to_draft: counts[9],
+        republish_from_closed: counts[10],
+        delete_draft: counts[11],
+        delete_published: counts[12],
+        delete_closed: counts[13],
     }
 }
 
 fn generate_bulk_activity_events(
     config: &DebugSeedConfig,
     rng: &mut SeededRng,
-    active_days: &[NaiveDate],
+    schedule: &BulkDaySchedule,
     targets: &ActivityTargets,
     events: &mut Vec<NormalizedEvent>,
     min_dt: &mut Option<NaiveDate>,
     max_dt: &mut Option<NaiveDate>,
 ) -> Result<(), IngestError> {
-    let orphan_drafts = targets.create_draft.saturating_sub(targets.first_publish);
+    let orphan_drafts = targets
+        .initial_draft
+        .saturating_sub(targets.publish_from_draft);
 
-    for pair_index in 0..targets.first_publish {
+    for pair_index in 0..targets.publish_from_draft {
         let api = BULK_APIS[pair_index as usize % BULK_APIS.len()];
         let content_id = format!("metric-{api}-{pair_index}");
         let publish_lead_days = api_publish_lead_days(api, pair_index);
         let draft_to_publish_days = api_draft_to_publish_days(api, pair_index);
-        let publish_at = random_received_at_on_days(rng, active_days);
+        let publish_at = random_received_at_on_schedule(rng, schedule);
         let content_created_at = publish_at - Duration::days(publish_lead_days);
         let draft_created_at = publish_at - Duration::days(draft_to_publish_days);
         let publish_day = jst_date(publish_at);
-        let eligible_draft_days: Vec<NaiveDate> = active_days
+        let eligible_draft_days: Vec<NaiveDate> = schedule
+            .days
             .iter()
-            .copied()
-            .filter(|day| *day <= publish_day)
+            .filter_map(|day| {
+                (day.date <= publish_day
+                    && !(publish_day == schedule.latest_date() && day.date == publish_day))
+                    .then_some(day.date)
+            })
             .collect();
         let draft_day = if eligible_draft_days.is_empty() {
             publish_day
@@ -293,7 +338,7 @@ fn generate_bulk_activity_events(
             max_dt,
             api,
             &content_id,
-            BulkTemplate::CreateDraft,
+            BulkTemplate::InitialDraft,
             draft_received_at,
             &BulkEventTiming {
                 draft_created_at: Some(draft_created_at),
@@ -307,7 +352,7 @@ fn generate_bulk_activity_events(
             max_dt,
             api,
             &content_id,
-            BulkTemplate::FirstPublish,
+            BulkTemplate::PublishFromDraft,
             publish_at,
             &BulkEventTiming {
                 draft_created_at: None,
@@ -320,7 +365,7 @@ fn generate_bulk_activity_events(
     for orphan_index in 0..orphan_drafts {
         let api = BULK_APIS[orphan_index as usize % BULK_APIS.len()];
         let content_id = format!("activity-draft-{orphan_index}");
-        let received_at = random_received_at_on_days(rng, active_days);
+        let received_at = random_received_at_on_schedule(rng, schedule);
         let draft_created_at = received_at - Duration::days(i64::from(orphan_index % 7 + 1));
         push_bulk_event(
             events,
@@ -328,7 +373,7 @@ fn generate_bulk_activity_events(
             max_dt,
             api,
             &content_id,
-            BulkTemplate::CreateDraft,
+            BulkTemplate::InitialDraft,
             received_at,
             &BulkEventTiming {
                 draft_created_at: Some(draft_created_at),
@@ -338,12 +383,33 @@ fn generate_bulk_activity_events(
         )?;
     }
 
-    for publish_index in 0..targets.create_publish {
+    for draft_index in 0..targets.save_draft {
+        let api = BULK_APIS[draft_index as usize % BULK_APIS.len()];
+        let content_id = format!("activity-save-draft-{draft_index}");
+        let received_at = random_received_at_on_schedule(rng, schedule);
+        let draft_created_at = received_at - Duration::days(i64::from(draft_index % 10 + 1));
+        push_bulk_event(
+            events,
+            min_dt,
+            max_dt,
+            api,
+            &content_id,
+            BulkTemplate::SaveDraft,
+            received_at,
+            &BulkEventTiming {
+                draft_created_at: Some(draft_created_at),
+                content_created_at: None,
+                content_published_at: None,
+            },
+        )?;
+    }
+
+    for publish_index in 0..targets.initial_publish {
         let api = BULK_APIS[publish_index as usize % BULK_APIS.len()];
         let content_id = format!("metric-{api}-direct-{publish_index}");
         let publish_lead_days =
             api_publish_lead_days(api, publish_index) + i64::from(publish_index % 4);
-        let publish_at = random_received_at_on_days(rng, active_days);
+        let publish_at = random_received_at_on_schedule(rng, schedule);
         let content_created_at = publish_at - Duration::days(publish_lead_days);
         push_bulk_event(
             events,
@@ -351,7 +417,7 @@ fn generate_bulk_activity_events(
             max_dt,
             api,
             &content_id,
-            BulkTemplate::CreatePublish,
+            BulkTemplate::InitialPublish,
             publish_at,
             &BulkEventTiming {
                 draft_created_at: None,
@@ -362,14 +428,28 @@ fn generate_bulk_activity_events(
     }
 
     let mut filler_templates = Vec::with_capacity(
-        (targets.update_publish
+        (targets.update_published
+            + targets.add_draft_to_published
+            + targets.discard_draft_on_published
             + targets.unpublish_to_draft
             + targets.unpublish_to_closed
-            + targets.delete) as usize,
+            + targets.reopen_to_draft
+            + targets.republish_from_closed
+            + targets.delete_draft
+            + targets.delete_published
+            + targets.delete_closed) as usize,
     );
     filler_templates.extend(std::iter::repeat_n(
-        BulkTemplate::UpdatePublish,
-        targets.update_publish as usize,
+        BulkTemplate::UpdatePublished,
+        targets.update_published as usize,
+    ));
+    filler_templates.extend(std::iter::repeat_n(
+        BulkTemplate::AddDraftToPublished,
+        targets.add_draft_to_published as usize,
+    ));
+    filler_templates.extend(std::iter::repeat_n(
+        BulkTemplate::DiscardDraftOnPublished,
+        targets.discard_draft_on_published as usize,
     ));
     filler_templates.extend(std::iter::repeat_n(
         BulkTemplate::UnpublishToDraft,
@@ -380,13 +460,29 @@ fn generate_bulk_activity_events(
         targets.unpublish_to_closed as usize,
     ));
     filler_templates.extend(std::iter::repeat_n(
-        BulkTemplate::Delete,
-        targets.delete as usize,
+        BulkTemplate::ReopenToDraft,
+        targets.reopen_to_draft as usize,
+    ));
+    filler_templates.extend(std::iter::repeat_n(
+        BulkTemplate::RepublishFromClosed,
+        targets.republish_from_closed as usize,
+    ));
+    filler_templates.extend(std::iter::repeat_n(
+        BulkTemplate::DeleteDraft,
+        targets.delete_draft as usize,
+    ));
+    filler_templates.extend(std::iter::repeat_n(
+        BulkTemplate::DeletePublished,
+        targets.delete_published as usize,
+    ));
+    filler_templates.extend(std::iter::repeat_n(
+        BulkTemplate::DeleteClosed,
+        targets.delete_closed as usize,
     ));
     shuffle_bulk_templates(rng, &mut filler_templates);
 
     for template in filler_templates {
-        let received_at = random_received_at_on_days(rng, active_days);
+        let received_at = random_received_at_on_schedule(rng, schedule);
         let api = BULK_APIS[rng.next_usize(BULK_APIS.len())];
         let content_id = pick_content_id(rng, config.contents);
         push_bulk_event(
@@ -671,13 +767,20 @@ fn smoke_fixture(
 
 #[derive(Debug, Clone, Copy)]
 enum BulkTemplate {
-    CreateDraft,
-    CreatePublish,
-    FirstPublish,
-    UpdatePublish,
+    InitialDraft,
+    SaveDraft,
+    PublishFromDraft,
+    InitialPublish,
+    UpdatePublished,
+    AddDraftToPublished,
+    DiscardDraftOnPublished,
     UnpublishToDraft,
     UnpublishToClosed,
-    Delete,
+    ReopenToDraft,
+    RepublishFromClosed,
+    DeleteDraft,
+    DeletePublished,
+    DeleteClosed,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -697,6 +800,30 @@ impl BulkEventTiming {
     }
 }
 
+#[derive(Debug, Clone)]
+struct BulkDaySchedule {
+    days: Vec<WeightedBulkDay>,
+}
+
+impl BulkDaySchedule {
+    fn latest_date(&self) -> NaiveDate {
+        self.days.last().expect("non-empty schedule").date
+    }
+}
+
+#[derive(Debug, Clone)]
+struct WeightedBulkDay {
+    date: NaiveDate,
+    weight: u32,
+}
+
+#[derive(Debug)]
+struct BulkDayCandidate {
+    date: NaiveDate,
+    weight: u32,
+    active_score: u32,
+}
+
 fn api_publish_lead_days(api: &str, index: u32) -> i64 {
     let base = match api {
         "blogs" => 1,
@@ -704,6 +831,11 @@ fn api_publish_lead_days(api: &str, index: u32) -> i64 {
         "news" => 4,
         "categories" => 3,
         "pages" => 8,
+        "advertisements" => 5,
+        "tags" => 1,
+        "labels" => 1,
+        "papers" => 14,
+        "cards" => 4,
         _ => 5,
     };
     base + i64::from(index % 5)
@@ -716,31 +848,88 @@ fn api_draft_to_publish_days(api: &str, index: u32) -> i64 {
         "news" => 10,
         "categories" => 6,
         "pages" => 18,
+        "advertisements" => 7,
+        "tags" => 1,
+        "labels" => 1,
+        "papers" => 24,
+        "cards" => 5,
         _ => 8,
     };
     base + i64::from(index % 6)
 }
 
-fn build_sparse_active_days(
+fn build_realistic_bulk_day_schedule(
     rng: &mut SeededRng,
     start_date: NaiveDate,
     days: u32,
-) -> Vec<NaiveDate> {
-    let mut active_days = Vec::new();
+) -> BulkDaySchedule {
+    let mut candidates = Vec::with_capacity(days as usize);
+    let end_date = start_date + Duration::days(i64::from(days - 1));
     for offset in 0..days {
-        let threshold = (BULK_ACTIVE_DAY_DENSITY * u64::MAX as f64) as u64;
-        if rng.next_u64() <= threshold {
-            active_days.push(start_date + Duration::days(i64::from(offset)));
+        let date = start_date + Duration::days(i64::from(offset));
+        let weekly_weight = weekly_activity_weight(date);
+        let campaign_weight = campaign_activity_weight(date);
+        let noise = rng.next_u32(35);
+        let weight = weekly_weight + campaign_weight + noise;
+        candidates.push(BulkDayCandidate {
+            date,
+            weight,
+            active_score: weekly_weight + campaign_weight * 2 + rng.next_u32(80),
+        });
+    }
+
+    let zero_days = ((f64::from(days) * (1.0 - BULK_ACTIVE_DAY_DENSITY)).round() as usize)
+        .min(candidates.len().saturating_sub(1));
+    candidates.sort_by_key(|day| (day.active_score, day.date));
+    let mut active_candidates = candidates.split_off(zero_days);
+    if !active_candidates.iter().any(|day| day.date == end_date)
+        && let Some(end_index) = candidates.iter().position(|day| day.date == end_date)
+    {
+        let end_candidate = candidates.remove(end_index);
+        active_candidates.push(end_candidate);
+        if let Some(remove_index) = active_candidates
+            .iter()
+            .position(|day| day.date != end_date)
+        {
+            active_candidates.remove(remove_index);
         }
     }
-    if active_days.is_empty() {
-        active_days.push(start_date);
+    active_candidates.sort_by_key(|day| day.date);
+
+    let schedule_days: Vec<WeightedBulkDay> = active_candidates
+        .into_iter()
+        .map(|day| WeightedBulkDay {
+            date: day.date,
+            weight: day.weight.max(1),
+        })
+        .collect();
+    BulkDaySchedule {
+        days: schedule_days,
     }
-    active_days
 }
 
-/// Filler templates are limited to UPDATE_PUBLISH / unpublish variants / DELETE so Grafana
-/// publish-duration metrics stay driven by coordinated metric-lifecycle pairs only.
+fn weekly_activity_weight(date: NaiveDate) -> u32 {
+    match date.weekday().number_from_monday() {
+        1 => 105,
+        2 => 120,
+        3 => 115,
+        4 => 110,
+        5 => 90,
+        6 => 35,
+        _ => 25,
+    }
+}
+
+fn campaign_activity_weight(date: NaiveDate) -> u32 {
+    match date.day() {
+        4..=6 | 14..=16 | 24..=26 => 80,
+        9 | 10 | 19 | 20 => 35,
+        _ => 0,
+    }
+}
+
+/// Filler templates exclude INITIAL_DRAFT / PUBLISH_FROM_DRAFT pairs so draft-to-publish
+/// metrics stay driven by coordinated metric lifecycles only.
 fn build_bulk_webhook_body(
     api: &str,
     content_id: &str,
@@ -764,7 +953,7 @@ fn build_bulk_webhook_body(
         .to_rfc3339();
 
     match template {
-        BulkTemplate::CreateDraft => format!(
+        BulkTemplate::InitialDraft => format!(
             r#"{{
               "service":"{SERVICE_ID}",
               "api":"{api}",
@@ -780,7 +969,23 @@ fn build_bulk_webhook_body(
               }}
             }}"#
         ),
-        BulkTemplate::CreatePublish => format!(
+        BulkTemplate::SaveDraft => format!(
+            r#"{{
+              "service":"{SERVICE_ID}",
+              "api":"{api}",
+              "id":"{content_id}",
+              "type":"edit",
+              "contents":{{
+                "old":{{"status":["DRAFT"],"updatedAt":"{day_before}"}},
+                "new":{{
+                  "status":["DRAFT"],
+                  "updatedAt":"{timestamp}",
+                  "draftValue":{{"createdAt":"{draft_created_at}"}}
+                }}
+              }}
+            }}"#
+        ),
+        BulkTemplate::InitialPublish => format!(
             r#"{{
               "service":"{SERVICE_ID}",
               "api":"{api}",
@@ -796,7 +1001,7 @@ fn build_bulk_webhook_body(
               }}
             }}"#
         ),
-        BulkTemplate::FirstPublish => format!(
+        BulkTemplate::PublishFromDraft => format!(
             r#"{{
               "service":"{SERVICE_ID}",
               "api":"{api}",
@@ -812,7 +1017,7 @@ fn build_bulk_webhook_body(
               }}
             }}"#
         ),
-        BulkTemplate::UpdatePublish => format!(
+        BulkTemplate::UpdatePublished => format!(
             r#"{{
               "service":"{SERVICE_ID}",
               "api":"{api}",
@@ -821,6 +1026,48 @@ fn build_bulk_webhook_body(
               "contents":{{
                 "old":{{"status":["PUBLISH"],"updatedAt":"{day_before}"}},
                 "new":{{"status":["PUBLISH"],"updatedAt":"{timestamp}"}}
+              }}
+            }}"#
+        ),
+        BulkTemplate::AddDraftToPublished => format!(
+            r#"{{
+              "service":"{SERVICE_ID}",
+              "api":"{api}",
+              "id":"{content_id}",
+              "type":"edit",
+              "contents":{{
+                "old":{{"status":["PUBLISH"],"updatedAt":"{day_before}"}},
+                "new":{{
+                  "status":["PUBLISH","DRAFT"],
+                  "updatedAt":"{timestamp}",
+                  "draftKey":"debug-draft-key",
+                  "publishValue":{{"createdAt":"{content_created_at}","publishedAt":"{content_published_at}"}},
+                  "draftValue":{{"createdAt":"{draft_created_at}"}}
+                }}
+              }}
+            }}"#
+        ),
+        BulkTemplate::DiscardDraftOnPublished => format!(
+            r#"{{
+              "service":"{SERVICE_ID}",
+              "api":"{api}",
+              "id":"{content_id}",
+              "type":"edit",
+              "contents":{{
+                "old":{{
+                  "status":["PUBLISH","DRAFT"],
+                  "updatedAt":"{day_before}",
+                  "draftKey":"debug-draft-key",
+                  "publishValue":{{"createdAt":"{content_created_at}","publishedAt":"{content_published_at}"}},
+                  "draftValue":{{"createdAt":"{draft_created_at}"}}
+                }},
+                "new":{{
+                  "status":["PUBLISH"],
+                  "updatedAt":"{timestamp}",
+                  "draftKey":null,
+                  "publishValue":{{"createdAt":"{content_created_at}","publishedAt":"{content_published_at}"}},
+                  "draftValue":null
+                }}
               }}
             }}"#
         ),
@@ -860,7 +1107,53 @@ fn build_bulk_webhook_body(
               }}
             }}"#
         ),
-        BulkTemplate::Delete => format!(
+        BulkTemplate::ReopenToDraft => format!(
+            r#"{{
+              "service":"{SERVICE_ID}",
+              "api":"{api}",
+              "id":"{content_id}",
+              "type":"edit",
+              "contents":{{
+                "old":{{"status":["CLOSED"],"updatedAt":"{day_before}"}},
+                "new":{{
+                  "status":["DRAFT"],
+                  "updatedAt":"{timestamp}",
+                  "draftKey":"debug-draft-key",
+                  "publishValue":null,
+                  "draftValue":{{"createdAt":"{draft_created_at}"}}
+                }}
+              }}
+            }}"#
+        ),
+        BulkTemplate::RepublishFromClosed => format!(
+            r#"{{
+              "service":"{SERVICE_ID}",
+              "api":"{api}",
+              "id":"{content_id}",
+              "type":"edit",
+              "contents":{{
+                "old":{{"status":["CLOSED"],"updatedAt":"{day_before}"}},
+                "new":{{
+                  "status":["PUBLISH"],
+                  "updatedAt":"{timestamp}",
+                  "publishValue":{{"createdAt":"{content_created_at}","publishedAt":"{content_published_at}"}}
+                }}
+              }}
+            }}"#
+        ),
+        BulkTemplate::DeleteDraft => format!(
+            r#"{{
+              "service":"{SERVICE_ID}",
+              "api":"{api}",
+              "id":"{content_id}",
+              "type":"delete",
+              "contents":{{
+                "old":{{"status":["DRAFT"],"updatedAt":"{timestamp}"}},
+                "new":null
+              }}
+            }}"#
+        ),
+        BulkTemplate::DeletePublished => format!(
             r#"{{
               "service":"{SERVICE_ID}",
               "api":"{api}",
@@ -868,6 +1161,18 @@ fn build_bulk_webhook_body(
               "type":"delete",
               "contents":{{
                 "old":{{"status":["PUBLISH"],"updatedAt":"{timestamp}"}},
+                "new":null
+              }}
+            }}"#
+        ),
+        BulkTemplate::DeleteClosed => format!(
+            r#"{{
+              "service":"{SERVICE_ID}",
+              "api":"{api}",
+              "id":"{content_id}",
+              "type":"delete",
+              "contents":{{
+                "old":{{"status":["CLOSED"],"updatedAt":"{timestamp}"}},
                 "new":null
               }}
             }}"#
@@ -935,15 +1240,55 @@ fn jst_offset() -> FixedOffset {
     FixedOffset::east_opt(9 * 60 * 60).expect("valid JST offset")
 }
 
-fn random_received_at_on_days(rng: &mut SeededRng, active_days: &[NaiveDate]) -> DateTime<Utc> {
-    let date = active_days[rng.next_usize(active_days.len())];
-    let hour = rng.next_u32(24);
+fn random_received_at_on_schedule(
+    rng: &mut SeededRng,
+    schedule: &BulkDaySchedule,
+) -> DateTime<Utc> {
+    let date = weighted_random_day(rng, schedule);
+    let hour = realistic_event_hour(rng, date);
     let minute = rng.next_u32(60);
     let second = rng.next_u32(60);
     jst_datetime(
         date,
         NaiveTime::from_hms_opt(hour, minute, second).expect("valid time"),
     )
+}
+
+fn weighted_random_day(rng: &mut SeededRng, schedule: &BulkDaySchedule) -> NaiveDate {
+    let total_weight: u64 = schedule.days.iter().map(|day| u64::from(day.weight)).sum();
+
+    if total_weight == 0 {
+        return schedule.latest_date();
+    }
+
+    let mut remaining = rng.next_u64() % total_weight;
+    for day in &schedule.days {
+        let weight = u64::from(day.weight);
+        if remaining < weight {
+            return day.date;
+        }
+        remaining -= weight;
+    }
+
+    schedule.latest_date()
+}
+
+fn realistic_event_hour(rng: &mut SeededRng, date: NaiveDate) -> u32 {
+    let sample = rng.next_u32(100);
+    let is_weekday = date.weekday().number_from_monday() <= 5;
+    if is_weekday {
+        match sample {
+            0..=74 => 9 + rng.next_u32(9),
+            75..=89 => 18 + rng.next_u32(4),
+            _ => rng.next_u32(24),
+        }
+    } else {
+        match sample {
+            0..=69 => 10 + rng.next_u32(8),
+            70..=84 => 18 + rng.next_u32(3),
+            _ => rng.next_u32(24),
+        }
+    }
 }
 
 fn pick_content_id(rng: &mut SeededRng, contents: u32) -> String {
@@ -1049,10 +1394,10 @@ mod tests {
         assert_eq!(events[7].content_id, None);
         assert_eq!(events[0].content_id.as_deref(), Some("content-1"));
         assert_eq!(events[6].content_id.as_deref(), Some("content-2"));
-        assert_eq!(events[0].event_kind.as_deref(), Some("FIRST_PUBLISH"));
+        assert_eq!(events[0].event_kind.as_deref(), Some("PUBLISH_FROM_DRAFT"));
         assert_eq!(events[3].event_kind.as_deref(), Some("UNPUBLISH_TO_DRAFT"));
         assert_eq!(events[4].event_kind.as_deref(), Some("UNPUBLISH_TO_CLOSED"));
-        assert_eq!(events[7].event_kind.as_deref(), Some("DELETE"));
+        assert_eq!(events[7].event_kind.as_deref(), Some("DELETE_PUBLISHED"));
         assert_eq!(received_at, events[0].received_at);
     }
 
@@ -1111,23 +1456,52 @@ mod tests {
         assert_eq!(summary.event_count, 2_000);
         let unique_days = count_unique_partition_dates(tempdir.path());
         assert!(
-            unique_days < 80,
-            "expected moderately sparse heatmap days, got {unique_days}"
+            unique_days <= 77,
+            "expected some zero-event days in heatmap, got {unique_days}"
         );
-        assert!(unique_days > 35);
+        assert!(
+            unique_days >= 67,
+            "expected most days to be active for large realistic seed, got {unique_days}"
+        );
     }
 
     #[test]
     fn compute_activity_targets_match_api_activity_ratios() {
-        let targets = compute_activity_targets(10_000);
-        assert_eq!(targets.total(), 10_000);
-        assert_eq!(targets.create_draft, 3_000);
-        assert_eq!(targets.create_publish, 1_500);
-        assert_eq!(targets.first_publish, 2_000);
-        assert_eq!(targets.update_publish, 2_500);
-        assert_eq!(targets.unpublish_to_draft, 500);
-        assert_eq!(targets.unpublish_to_closed, 200);
-        assert_eq!(targets.delete, 300);
+        let targets = compute_activity_targets(50_000, 365);
+        assert_eq!(targets.total(), 50_000);
+        assert_eq!(targets.initial_draft, 10_000);
+        assert_eq!(targets.save_draft, 7_500);
+        assert_eq!(targets.publish_from_draft, 1_325);
+        assert_eq!(targets.initial_publish, 300);
+        assert_eq!(targets.update_published, 9_425);
+        assert_eq!(targets.add_draft_to_published, 10_000);
+        assert_eq!(targets.discard_draft_on_published, 2_500);
+        assert_eq!(targets.unpublish_to_draft, 4_000);
+        assert_eq!(targets.unpublish_to_closed, 2_000);
+        assert_eq!(targets.reopen_to_draft, 500);
+        assert_eq!(targets.republish_from_closed, 200);
+        assert_eq!(targets.delete_draft, 500);
+        assert_eq!(targets.delete_published, 1_500);
+        assert_eq!(targets.delete_closed, 250);
+    }
+
+    #[test]
+    fn bulk_api_set_includes_realistic_content_types() {
+        assert_eq!(
+            BULK_APIS,
+            [
+                "blogs",
+                "authors",
+                "news",
+                "categories",
+                "pages",
+                "advertisements",
+                "tags",
+                "labels",
+                "papers",
+                "cards"
+            ]
+        );
     }
 
     #[test]
@@ -1212,7 +1586,7 @@ mod tests {
                         continue;
                     }
                     let kind = event_kinds.value(row);
-                    if matches!(kind, "CREATE_DRAFT" | "FIRST_PUBLISH" | "CREATE_PUBLISH") {
+                    if matches!(kind, "INITIAL_DRAFT" | "PUBLISH_FROM_DRAFT") {
                         filler_lifecycle_kinds += 1;
                     }
                 }
@@ -1244,16 +1618,36 @@ mod tests {
                 .iter()
                 .all(|event| event.event_kind.as_deref() != Some("UNPUBLISH"))
         );
+        assert!(
+            events
+                .iter()
+                .any(|event| event.event_kind.as_deref() == Some("ADD_DRAFT_TO_PUBLISHED"))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| { event.event_kind.as_deref() == Some("DISCARD_DRAFT_ON_PUBLISHED") })
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| event.event_kind.as_deref() == Some("REOPEN_TO_DRAFT"))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| event.event_kind.as_deref() == Some("REPUBLISH_FROM_CLOSED"))
+        );
     }
 
     #[test]
     fn metric_lifecycle_draft_to_publish_days_stay_within_api_ranges() {
-        let events = generate_test_bulk_events(10_000);
-        let targets = compute_activity_targets(10_000);
+        let events = generate_test_bulk_events(50_000);
+        let targets = compute_activity_targets(50_000, 90);
 
         for api in BULK_APIS {
             let mut durations = Vec::new();
-            for pair_index in 0..targets.first_publish {
+            for pair_index in 0..targets.publish_from_draft {
                 if BULK_APIS[pair_index as usize % BULK_APIS.len()] != *api {
                     continue;
                 }
@@ -1262,14 +1656,14 @@ mod tests {
                     .iter()
                     .find(|event| {
                         event.content_id.as_deref() == Some(content_id.as_str())
-                            && event.event_kind.as_deref() == Some("CREATE_DRAFT")
+                            && event.event_kind.as_deref() == Some("INITIAL_DRAFT")
                     })
                     .expect("draft event");
                 let publish = events
                     .iter()
                     .find(|event| {
                         event.content_id.as_deref() == Some(content_id.as_str())
-                            && event.event_kind.as_deref() == Some("FIRST_PUBLISH")
+                            && event.event_kind.as_deref() == Some("PUBLISH_FROM_DRAFT")
                     })
                     .expect("publish event");
                 durations.push(
@@ -1286,6 +1680,11 @@ mod tests {
                 "news" => 10,
                 "categories" => 6,
                 "pages" => 18,
+                "advertisements" => 7,
+                "tags" => 1,
+                "labels" => 1,
+                "papers" => 24,
+                "cards" => 5,
                 _ => 8,
             };
             assert!(
@@ -1298,36 +1697,157 @@ mod tests {
 
     #[test]
     fn metric_lifecycle_events_vary_publish_and_draft_durations_by_api() {
-        let events = generate_test_bulk_events(10_000);
+        let events = generate_test_bulk_events(50_000);
 
         let blogs_lead = publish_lead_days_for_api(&events, "blogs");
         let pages_lead = publish_lead_days_for_api(&events, "pages");
         assert!(blogs_lead < pages_lead);
 
-        let blogs_draft_lead = draft_to_publish_days_for_api(&events, "blogs");
-        let pages_draft_lead = draft_to_publish_days_for_api(&events, "pages");
-        assert!(blogs_draft_lead < pages_draft_lead);
+        let labels_draft_lead = draft_to_publish_days_for_api(&events, "labels");
+        let papers_draft_lead = draft_to_publish_days_for_api(&events, "papers");
+        assert!(labels_draft_lead < papers_draft_lead);
+    }
+
+    #[test]
+    fn publish_actions_follow_new_ratio_and_year_distribution() {
+        let events = generate_test_bulk_events_for_days(50_000, 365);
+        let today = jst_today();
+        let start = today - Duration::days(364);
+        let midpoint = start + Duration::days(182);
+        let mut first_half = 0usize;
+        let mut second_half = 0usize;
+        let mut daily_counts: BTreeMap<NaiveDate, usize> = BTreeMap::new();
+
+        for event in events {
+            if !matches!(
+                event.event_kind.as_deref(),
+                Some("PUBLISH_FROM_DRAFT")
+                    | Some("INITIAL_PUBLISH")
+                    | Some("REPUBLISH_FROM_CLOSED")
+            ) {
+                continue;
+            }
+            let day = jst_date(event.received_at);
+            *daily_counts.entry(day).or_default() += 1;
+            if day <= midpoint {
+                first_half += 1;
+            } else {
+                second_half += 1;
+            }
+        }
+
+        let publish_actions = first_half + second_half;
+        let average_daily = publish_actions as f64 / 365.0;
+        let max_daily = daily_counts.values().copied().max().unwrap_or(0);
+        let ratio = first_half as f64 / second_half as f64;
+        assert_eq!(publish_actions, 1_825);
+        assert!(
+            (4.9..=5.1).contains(&average_daily),
+            "publish actions should average around 5 per day, got {average_daily}"
+        );
+        assert!(
+            max_daily <= 20,
+            "publish actions should stay below the intended daily cap, got max_daily={max_daily}"
+        );
+        assert!(
+            (0.80..=1.25).contains(&ratio),
+            "publish actions should look natural across the full year, got first_half={first_half}, second_half={second_half}, ratio={ratio}"
+        );
+    }
+
+    #[test]
+    fn bulk_seed_matches_new_event_kind_ratios() {
+        let events = generate_test_bulk_events_for_days(50_000, 365);
+        let targets = compute_activity_targets(50_000, 365);
+
+        assert_eq!(
+            count_events(&events, "INITIAL_DRAFT"),
+            targets.initial_draft as usize
+        );
+        assert_eq!(
+            count_events(&events, "SAVE_DRAFT"),
+            targets.save_draft as usize
+        );
+        assert_eq!(
+            count_events(&events, "PUBLISH_FROM_DRAFT"),
+            targets.publish_from_draft as usize
+        );
+        assert_eq!(
+            count_events(&events, "INITIAL_PUBLISH"),
+            targets.initial_publish as usize
+        );
+        assert_eq!(
+            count_events(&events, "UPDATE_PUBLISHED"),
+            targets.update_published as usize
+        );
+        assert_eq!(
+            count_events(&events, "ADD_DRAFT_TO_PUBLISHED"),
+            targets.add_draft_to_published as usize
+        );
+        assert_eq!(
+            count_events(&events, "DISCARD_DRAFT_ON_PUBLISHED"),
+            targets.discard_draft_on_published as usize
+        );
+        assert_eq!(
+            count_events(&events, "UNPUBLISH_TO_DRAFT"),
+            targets.unpublish_to_draft as usize
+        );
+        assert_eq!(
+            count_events(&events, "UNPUBLISH_TO_CLOSED"),
+            targets.unpublish_to_closed as usize
+        );
+        assert_eq!(
+            count_events(&events, "REOPEN_TO_DRAFT"),
+            targets.reopen_to_draft as usize
+        );
+        assert_eq!(
+            count_events(&events, "REPUBLISH_FROM_CLOSED"),
+            targets.republish_from_closed as usize
+        );
+        assert_eq!(
+            count_events(&events, "DELETE_DRAFT"),
+            targets.delete_draft as usize
+        );
+        assert_eq!(
+            count_events(&events, "DELETE_PUBLISHED"),
+            targets.delete_published as usize
+        );
+        assert_eq!(
+            count_events(&events, "DELETE_CLOSED"),
+            targets.delete_closed as usize
+        );
     }
 
     fn generate_test_bulk_events(count: u32) -> Vec<NormalizedEvent> {
+        generate_test_bulk_events_for_days(count, 90)
+    }
+
+    fn count_events(events: &[NormalizedEvent], event_kind: &str) -> usize {
+        events
+            .iter()
+            .filter(|event| event.event_kind.as_deref() == Some(event_kind))
+            .count()
+    }
+
+    fn generate_test_bulk_events_for_days(count: u32, days: u32) -> Vec<NormalizedEvent> {
         let mut events = Vec::new();
         let mut rng = SeededRng::new(42);
         let end_date = jst_today();
-        let start_date = end_date - Duration::days(89);
-        let active_days = build_sparse_active_days(&mut rng, start_date, 90);
-        let targets = compute_activity_targets(count);
+        let start_date = end_date - Duration::days(i64::from(days - 1));
+        let schedule = build_realistic_bulk_day_schedule(&mut rng, start_date, days);
+        let targets = compute_activity_targets(count, days);
         generate_bulk_activity_events(
             &DebugSeedConfig {
                 output_dir: PathBuf::new(),
                 preset: DebugSeedPreset::Bulk,
                 count,
-                days: 90,
+                days,
                 contents: 20,
                 rows_per_file: 100,
                 seed: 42,
             },
             &mut rng,
-            &active_days,
+            &schedule,
             &targets,
             &mut events,
             &mut None,
@@ -1338,11 +1858,13 @@ mod tests {
     }
 
     #[test]
-    fn build_sparse_active_days_covers_fraction_of_range() {
+    fn realistic_bulk_day_schedule_covers_most_of_range_with_zero_days() {
         let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
-        let active_days = build_sparse_active_days(&mut SeededRng::new(42), start, 90);
-        assert!(active_days.len() < 75);
-        assert!(active_days.len() > 35);
+        let schedule = build_realistic_bulk_day_schedule(&mut SeededRng::new(42), start, 365);
+        assert!(schedule.days.len() <= 310);
+        assert!(schedule.days.len() >= 274);
+        let total_weight: u32 = schedule.days.iter().map(|day| day.weight).sum();
+        assert!(total_weight > schedule.days.len() as u32);
     }
 
     fn publish_lead_days_for_api(events: &[NormalizedEvent], api: &str) -> i64 {
@@ -1352,7 +1874,9 @@ mod tests {
                 event.api.as_deref() == Some(api)
                     && matches!(
                         event.event_kind.as_deref(),
-                        Some("FIRST_PUBLISH") | Some("CREATE_PUBLISH")
+                        Some("PUBLISH_FROM_DRAFT")
+                            | Some("INITIAL_PUBLISH")
+                            | Some("REPUBLISH_FROM_CLOSED")
                     )
                     && event.content_created_at.is_some()
                     && event.content_published_at.is_some()
@@ -1367,14 +1891,14 @@ mod tests {
             .iter()
             .find(|event| {
                 event.content_id.as_deref() == Some(content_id.as_str())
-                    && event.event_kind.as_deref() == Some("CREATE_DRAFT")
+                    && event.event_kind.as_deref() == Some("INITIAL_DRAFT")
             })
             .expect("draft event");
         let publish = events
             .iter()
             .find(|event| {
                 event.content_id.as_deref() == Some(content_id.as_str())
-                    && event.event_kind.as_deref() == Some("FIRST_PUBLISH")
+                    && event.event_kind.as_deref() == Some("PUBLISH_FROM_DRAFT")
             })
             .expect("publish event");
         (publish.content_published_at.unwrap() - draft.draft_created_at.unwrap()).num_days()
@@ -1385,7 +1909,7 @@ mod tests {
             .iter()
             .find(|event| {
                 event.api.as_deref() == Some(api)
-                    && event.event_kind.as_deref() == Some("FIRST_PUBLISH")
+                    && event.event_kind.as_deref() == Some("PUBLISH_FROM_DRAFT")
                     && event
                         .content_id
                         .as_deref()

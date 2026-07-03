@@ -11,9 +11,10 @@ use super::{
 use crate::ApiError;
 use crate::query::{
     ApiActivityRow, AverageDraftToPublishRow, AverageTimeToPublishRow, CalendarHeatmapRow,
-    TopUpdatedContentRow, query_api_activity_rows, query_average_draft_to_publish_rows,
-    query_average_time_to_publish_rows, query_calendar_heatmap_rows,
-    query_top_updated_contents_rows,
+    PublishActionSummaryRow, PublishActionTrendRow, TopUpdatedContentRow, query_api_activity_rows,
+    query_average_draft_to_publish_rows, query_average_time_to_publish_rows,
+    query_calendar_heatmap_rows, query_publish_action_summary_rows,
+    query_publish_action_trend_rows, query_top_updated_contents_rows,
 };
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +49,11 @@ pub(crate) fn app(state: AppState) -> Result<Router, ApiError> {
     Ok(Router::new()
         .route("/health", get(health))
         .route("/metrics/calendar-heatmap", get(calendar_heatmap))
+        .route(
+            "/metrics/publish-action-summary",
+            get(publish_action_summary),
+        )
+        .route("/metrics/publish-action-trend", get(publish_action_trend))
         .route("/metrics/api-activity", get(api_activity))
         .route("/metrics/top-updated-contents", get(top_updated_contents))
         .route(
@@ -87,6 +93,34 @@ async fn api_activity(
     state
         .duckdb
         .query(move |connection, events_sql| query_api_activity_rows(connection, events_sql, days))
+        .await
+        .map(Json)
+}
+
+async fn publish_action_summary(
+    State(state): State<AppState>,
+    Query(query): Query<DaysQuery>,
+) -> Result<Json<Vec<PublishActionSummaryRow>>, ApiError> {
+    let days = validate_days(query.days)?;
+    state
+        .duckdb
+        .query(move |connection, events_sql| {
+            query_publish_action_summary_rows(connection, events_sql, days)
+        })
+        .await
+        .map(Json)
+}
+
+async fn publish_action_trend(
+    State(state): State<AppState>,
+    Query(query): Query<TimeRangeQuery>,
+) -> Result<Json<Vec<PublishActionTrendRow>>, ApiError> {
+    let (from_ms, to_ms) = validate_time_range(query.from, query.to)?;
+    state
+        .duckdb
+        .query(move |connection, events_sql| {
+            query_publish_action_trend_rows(connection, events_sql, from_ms, to_ms)
+        })
         .await
         .map(Json)
 }

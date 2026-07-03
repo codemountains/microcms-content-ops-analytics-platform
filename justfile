@@ -109,7 +109,7 @@ debug-parquet-seed:
 debug-parquet-seed-large:
     cargo run -p webhook-ingest --bin debug-parquet-seed -- \
       --preset bulk \
-      --count "${DEBUG_SEED_COUNT:-10000}" \
+      --count "${DEBUG_SEED_COUNT:-50000}" \
       --days "${DEBUG_SEED_DAYS:-365}" \
       --output-dir "{{debug_parquet_dir}}"
     @just debug-parquet-sync
@@ -158,6 +158,8 @@ debug-parquet-delete:
 debug-metrics:
     curl http://localhost:8000/health
     curl "http://localhost:8000/metrics/calendar-heatmap"
+    curl "http://localhost:8000/metrics/publish-action-summary?days=1"
+    curl "http://localhost:8000/metrics/publish-action-trend"
     curl "http://localhost:8000/metrics/api-activity?days=3660"
     curl "http://localhost:8000/metrics/top-updated-contents?days=3660&limit=20"
     curl "http://localhost:8000/metrics/average-time-to-publish-by-api?days=3660"
