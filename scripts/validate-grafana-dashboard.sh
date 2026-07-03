@@ -114,7 +114,7 @@ run_jq "Calendar Heatmap panel wiring" -e '
 
 run_jq "publish KPI panels are placed below Calendar Heatmap" -e '
   (.panels[] | select(.title == "Today Publish Count") | .type == "stat" and .gridPos == {"h":5,"w":12,"x":0,"y":9})
-    and (.panels[] | select(.title == "Publish Rate") | .type == "gauge" and .gridPos == {"h":5,"w":12,"x":12,"y":9})
+    and (.panels[] | select(.title == "Published State Rate") | .type == "gauge" and .gridPos == {"h":5,"w":12,"x":12,"y":9})
     and (.panels[] | select(.title == "Publish Action Trend") | .type == "timeseries" and .gridPos == {"h":8,"w":24,"x":0,"y":14})
 '
 
@@ -128,15 +128,15 @@ run_jq "Today Publish Count panel wiring" -e '
   | select(.selector == "publish_count" and .text == "publish_count" and .type == "number")
 '
 
-run_jq "Publish Rate panel wiring" -e '
+run_jq "Published State Rate panel wiring" -e '
   .panels[]
-  | select(.title == "Publish Rate")
+  | select(.title == "Published State Rate")
   | select(.fieldConfig.defaults.unit == "percentunit")
   | .targets[]
   | select(.url == "/metrics/publish-action-summary")
   | select((.url_options.params // []) == [{"key":"days","value":"1"}])
   | .columns[]
-  | select(.selector == "publish_rate" and .text == "publish_rate" and .type == "number")
+  | select(.selector == "published_state_rate" and .text == "published_state_rate" and .type == "number")
 '
 
 run_jq "Publish Action Trend panel wiring" -e '
