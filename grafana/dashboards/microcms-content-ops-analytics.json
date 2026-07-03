@@ -405,28 +405,381 @@
         "uid": "duckdb-query-api"
       },
       "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "draft_activity"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "下書き操作"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "publish_activity"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "公開・更新"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unpublish_activity"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "非公開・再開"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "delete_activity"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "削除"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "initial_draft"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "初回下書き"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "save_draft"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "下書き保存"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "add_draft_to_published"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "公開中に下書き追加"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "discard_draft_on_published"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "公開中の下書き破棄"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "super-light-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "publish_from_draft"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "下書きから公開"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "initial_publish"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "初回公開"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "update_published"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "公開中更新"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "republish_from_closed"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "非公開から再公開"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "super-light-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unpublish_to_draft"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "公開→下書き"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unpublish_to_closed"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "公開→非公開"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reopen_to_draft"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "非公開→下書き"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "delete_draft"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "下書き削除"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "delete_published"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "公開削除"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "delete_closed"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "非公開削除"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 9,
-        "w": 12,
+        "h": 10,
+        "w": 24,
         "x": 0,
         "y": 22
       },
       "id": 2,
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
         },
-        "orientation": "auto",
-        "showValue": "auto",
+        "orientation": "horizontal",
+        "showValue": "never",
         "stacking": "normal",
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
@@ -535,7 +888,7 @@
         }
       ],
       "title": "API Activity",
-      "description": "API ごとの event_kind 別件数（直近 30 日）。新しい詳細 event_kind 14 種を stacked bar で表示します。",
+      "description": "API ごとの event_kind 件数（直近 30 日）。既定は下書き操作 / 公開・更新 / 非公開・再開 / 削除の 4 カテゴリ集約を horizontal stacked bar で表示します。上部の api_activity_view で 14 種の詳細内訳に切り替えられます。",
       "transformations": [
         {
           "id": "organize",
@@ -556,6 +909,80 @@
               "delete_draft": 12,
               "delete_published": 13,
               "delete_closed": 14
+            }
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "draft_activity",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "initial_draft",
+                "save_draft",
+                "add_draft_to_published",
+                "discard_draft_on_published"
+              ],
+              "reducer": "sum"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "publish_activity",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "publish_from_draft",
+                "initial_publish",
+                "update_published",
+                "republish_from_closed"
+              ],
+              "reducer": "sum"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "unpublish_activity",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "unpublish_to_draft",
+                "unpublish_to_closed",
+                "reopen_to_draft"
+              ],
+              "reducer": "sum"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "delete_activity",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "delete_draft",
+                "delete_published",
+                "delete_closed"
+              ],
+              "reducer": "sum"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "${api_activity_view}"
             }
           }
         }
@@ -587,8 +1014,8 @@
       "gridPos": {
         "h": 9,
         "w": 12,
-        "x": 12,
-        "y": 22
+        "x": 0,
+        "y": 32
       },
       "id": 3,
       "options": {
@@ -742,8 +1169,8 @@
       "gridPos": {
         "h": 9,
         "w": 12,
-        "x": 0,
-        "y": 31
+        "x": 12,
+        "y": 32
       },
       "id": 4,
       "options": {
@@ -900,7 +1327,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 31
+        "y": 41
       },
       "id": 5,
       "options": {
@@ -992,6 +1419,34 @@
       {
         "current": {
           "selected": true,
+          "text": "カテゴリ集約",
+          "value": "^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "API Activity",
+        "multi": false,
+        "name": "api_activity_view",
+        "options": [
+          {
+            "selected": true,
+            "text": "カテゴリ集約",
+            "value": "^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$"
+          },
+          {
+            "selected": false,
+            "text": "詳細 (14種)",
+            "value": "^(api|initial_draft|save_draft|publish_from_draft|initial_publish|update_published|add_draft_to_published|discard_draft_on_published|unpublish_to_draft|unpublish_to_closed|reopen_to_draft|republish_from_closed|delete_draft|delete_published|delete_closed)$"
+          }
+        ],
+        "query": "",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
           "text": "days",
           "value": "days"
         },
@@ -1026,5 +1481,5 @@
   "timezone": "Asia/Tokyo",
   "title": "microCMS Content Ops Analytics",
   "uid": "microcms-content-ops",
-  "version": 5
+  "version": 6
 }

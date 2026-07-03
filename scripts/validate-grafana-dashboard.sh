@@ -219,6 +219,53 @@ run_jq "API Activity series order transformation" -e '
     }])
 '
 
+run_jq "api_activity_view dashboard variable" -e '
+  .templating.list[]
+  | select(.name == "api_activity_view" and .type == "custom")
+  | .options as $options
+  | any(
+      $options[];
+      .text == "カテゴリ集約"
+        and .value == "^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$"
+    )
+    and any(
+      $options[];
+      .text == "詳細 (14種)"
+        and .value == "^(api|initial_draft|save_draft|publish_from_draft|initial_publish|update_published|add_draft_to_published|discard_draft_on_published|unpublish_to_draft|unpublish_to_closed|reopen_to_draft|republish_from_closed|delete_draft|delete_published|delete_closed)$"
+    )
+'
+
+run_jq "API Activity category aggregation transformations" -e '
+  .panels[]
+  | select(.title == "API Activity")
+  | .transformations
+  | map(select(.id == "calculateField" and .options.mode == "reduceRow")) as $calcs
+  | ($calcs | length) == 4
+    and any($calcs[]; .options.alias == "draft_activity")
+    and any($calcs[]; .options.alias == "publish_activity")
+    and any($calcs[]; .options.alias == "unpublish_activity")
+    and any($calcs[]; .options.alias == "delete_activity")
+'
+
+run_jq "API Activity field filter by view" -e '
+  .panels[]
+  | select(.title == "API Activity")
+  | .transformations[]
+  | select(
+      .id == "filterFieldsByName"
+        and .options.include.pattern == "${api_activity_view}"
+    )
+'
+
+run_jq "API Activity horizontal bar chart options" -e '
+  .panels[]
+  | select(.title == "API Activity")
+  | select(.type == "barchart")
+  | select(.options.orientation == "horizontal")
+  | select(.options.tooltip.mode == "multi")
+  | select(.options.stacking == "normal")
+'
+
 run_jq "Top Updated Contents count field mapping" -e '
   .panels[]
   | select(.title == "Top Updated Contents")
