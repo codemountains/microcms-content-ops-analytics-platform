@@ -155,23 +155,33 @@ else
   check_plugin "tim012432-calendarheatmap-panel" "Calendar Heatmap"
 fi
 
+datasource_is_default=false
+datasource_get_body="$TMP_DIR/datasource-get.json"
+datasource_get_status="$(api_request GET "/api/datasources/uid/duckdb-query-api" "$datasource_get_body")"
+case "$datasource_get_status" in
+  2*) datasource_is_default="$(jq -r 'if .isDefault == true then "true" else "false" end' "$datasource_get_body")" ;;
+  404) ;;
+  *)
+    fail "/api/datasources/uid/duckdb-query-api returned HTTP $datasource_get_status: $(body_summary "$datasource_get_body")"
+    ;;
+esac
+
 datasource_payload="$TMP_DIR/datasource.json"
 jq -n \
   --arg url "$QUERY_API_URL" \
+  --argjson is_default "$datasource_is_default" \
   '{
     name: "DuckDB Query API",
     uid: "duckdb-query-api",
     type: "yesoreyeram-infinity-datasource",
     access: "proxy",
     url: $url,
-    isDefault: true,
+    isDefault: $is_default,
     editable: true,
     jsonData: {},
     secureJsonData: {}
   }' >"$datasource_payload"
 
-datasource_get_body="$TMP_DIR/datasource-get.json"
-datasource_get_status="$(api_request GET "/api/datasources/uid/duckdb-query-api" "$datasource_get_body")"
 case "$datasource_get_status" in
   2*)
     datasource_body="$TMP_DIR/datasource-update-response.json"
@@ -184,9 +194,6 @@ case "$datasource_get_status" in
     datasource_status="$(api_request POST "/api/datasources" "$datasource_body" "$datasource_payload")"
     expect_success "$datasource_status" "/api/datasources" "$datasource_body"
     echo "Created Grafana datasource duckdb-query-api."
-    ;;
-  *)
-    fail "/api/datasources/uid/duckdb-query-api returned HTTP $datasource_get_status: $(body_summary "$datasource_get_body")"
     ;;
 esac
 

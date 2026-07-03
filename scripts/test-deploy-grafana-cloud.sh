@@ -123,15 +123,17 @@ case "$path" in
     if [[ "$method" = "PUT" && -n "$data_file" ]]; then
       cp "$data_file" "$FAKE_CURL_TMP/datasource-update.json"
       body='{"message":"Datasource updated"}'
+    elif [[ "$FAKE_CURL_MODE" = "datasource-existing-default" ]]; then
+      body='{"uid":"duckdb-query-api","isDefault":true}'
     elif [[ "$FAKE_CURL_MODE" = "datasource-existing" ]]; then
-      body='{"uid":"duckdb-query-api"}'
+      body='{"uid":"duckdb-query-api","isDefault":false}'
     else
       status=404
       body='{"message":"Data source not found"}'
     fi
     ;;
   /api/dashboards/uid/microcms-content-ops)
-    if [[ "$FAKE_CURL_MODE" = "datasource-existing" ]]; then
+    if [[ "$FAKE_CURL_MODE" = datasource-existing* ]]; then
       body='{"dashboard":{"uid":"microcms-content-ops"},"meta":{"folderUid":"existing-folder"}}'
     else
       status=404
@@ -230,7 +232,7 @@ test_create_datasource_and_dashboard() {
   assert_not_contains "$FAKE_CURL_LOG" "secret-token"
 
   assert_json "$FAKE_CURL_TMP/datasource-create.json" \
-    '.uid == "duckdb-query-api" and .type == "yesoreyeram-infinity-datasource" and .access == "proxy" and .url == "http://alb.example.local" and .isDefault == true' \
+    '.uid == "duckdb-query-api" and .type == "yesoreyeram-infinity-datasource" and .access == "proxy" and .url == "http://alb.example.local" and .isDefault == false' \
     "datasource create payload did not match"
   assert_json "$FAKE_CURL_TMP/dashboard.json" \
     '.overwrite == true and .folderUid == "ops" and .dashboard.id == null and .dashboard.uid == "microcms-content-ops"' \
@@ -246,11 +248,23 @@ test_update_existing_datasource_with_explicit_query_url() {
 
   assert_contains "$FAKE_CURL_LOG" "PUT /api/datasources/uid/duckdb-query-api"
   assert_json "$FAKE_CURL_TMP/datasource-update.json" \
-    '.uid == "duckdb-query-api" and .url == "https://query.example.com"' \
+    '.uid == "duckdb-query-api" and .url == "https://query.example.com" and .isDefault == false' \
     "datasource update payload did not match"
   assert_json "$FAKE_CURL_TMP/dashboard.json" \
     '.folderUid == "existing-folder"' \
     "dashboard payload did not preserve existing folder"
+}
+
+test_update_preserves_existing_default_datasource() {
+  run_with_fakes "datasource-existing-default" env \
+    GRAFANA_STACK_URL="https://example.grafana.net" \
+    GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN="secret-token" \
+    QUERY_API_URL="https://query.example.com" \
+    "$SCRIPT"
+
+  assert_json "$FAKE_CURL_TMP/datasource-update.json" \
+    '.uid == "duckdb-query-api" and .isDefault == true' \
+    "datasource update payload did not preserve existing default flag"
 }
 
 test_plugin_missing_can_be_skipped() {
@@ -278,6 +292,7 @@ test_plugin_missing_can_be_skipped() {
 test_missing_required_env
 test_create_datasource_and_dashboard
 test_update_existing_datasource_with_explicit_query_url
+test_update_preserves_existing_default_datasource
 test_plugin_missing_can_be_skipped
 
 echo "deploy-grafana-cloud tests passed"
