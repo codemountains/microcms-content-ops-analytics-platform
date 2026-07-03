@@ -235,6 +235,16 @@ run_jq "api_activity_view dashboard variable" -e '
     )
 '
 
+run_jq "api_activity_view query renders custom options" -e '
+  .templating.list[]
+  | select(.name == "api_activity_view" and .type == "custom")
+  | .query as $query
+  | ($query | length > 0)
+    and ($query | contains(" : "))
+    and ($query | contains("^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$"))
+    and ($query | contains("^(api|initial_draft|save_draft|publish_from_draft|initial_publish|update_published|add_draft_to_published|discard_draft_on_published|unpublish_to_draft|unpublish_to_closed|reopen_to_draft|republish_from_closed|delete_draft|delete_published|delete_closed)$"))
+'
+
 run_jq "API Activity category aggregation transformations" -e '
   .panels[]
   | select(.title == "API Activity")
