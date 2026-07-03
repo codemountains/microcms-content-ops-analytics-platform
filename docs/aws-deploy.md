@@ -14,7 +14,7 @@
 - CloudWatch Logs
 - VPC / public subnets / security groups
 
-Grafana は AWS にはデプロイしません。ローカル Grafana から `query_api_url` を見る前提です。
+Grafana は AWS にはデプロイしません。必要に応じて、既存の Grafana Cloud stack に `query_api_url` を向けた datasource と dashboard を反映します。
 
 ## 前提
 
@@ -24,6 +24,10 @@ Grafana は AWS にはデプロイしません。ローカル Grafana から `qu
 - just
 - jq
 - 対象 AWS account で、ECR/Lambda/ECS/VPC/IAM/API Gateway/S3/CloudWatch Logs/ALB を作成できる権限
+- Grafana Cloud に反映する場合:
+  - 既存 Grafana Cloud stack
+  - datasource / dashboard を書き込める Grafana service account token
+  - `yesoreyeram-infinity-datasource` と `tim012432-calendarheatmap-panel` plugin の事前インストール
 
 AWS credentials が有効であることを確認します。
 
@@ -125,9 +129,53 @@ curl "$QUERY_API_URL/health"
 curl "$QUERY_API_URL/metrics/calendar-heatmap"
 ```
 
-Grafana から見る場合は、ローカル Grafana の datasource URL を `query_api_url` に変更します。
+## 6. Grafana Cloud に dashboard を反映する
 
-## 6. ドメイン設定について
+Grafana Cloud stack が作成済みの場合、AWS の `query_api_url` を datasource URL として反映し、既存 dashboard JSON を upsert できます。
+ローカル Docker Compose 向けの `grafana/provisioning/` はそのまま維持します。
+
+```bash
+export GRAFANA_STACK_URL="https://<stack>.grafana.net"
+export GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN="<service-account-token>"
+just deploy-grafana-cloud
+```
+
+`QUERY_API_URL` を明示しない場合、script は `tofu -chdir=infra/aws output -raw query_api_url` を使います。
+別の URL を指定したい場合:
+
+```bash
+QUERY_API_URL="https://query-api.example.com" just deploy-grafana-cloud
+```
+
+反映される内容:
+
+| 対象 | 値 |
+| --- | --- |
+| datasource name | `DuckDB Query API` |
+| datasource uid | `duckdb-query-api` |
+| datasource type | `yesoreyeram-infinity-datasource` |
+| datasource URL | `QUERY_API_URL` または OpenTofu output `query_api_url` |
+| dashboard uid | `microcms-content-ops` |
+| dashboard JSON | `grafana/dashboards/microcms-content-ops-analytics.json` |
+
+任意設定:
+
+| 変数 | 用途 |
+| --- | --- |
+| `GRAFANA_DASHBOARD_UID` | dashboard uid を既定値 `microcms-content-ops` から変更 |
+| `GRAFANA_FOLDER_UID` | 配置先 folder uid を指定 |
+| `GRAFANA_SKIP_PLUGIN_CHECK=1` | Infinity datasource / Calendar Heatmap plugin 確認を明示的に skip |
+
+`yesoreyeram-infinity-datasource` と `tim012432-calendarheatmap-panel` は Grafana Cloud stack に事前インストール済みであることを前提にします。
+未インストールの場合、`just deploy-grafana-cloud` は datasource / dashboard 更新前に分かりやすいエラーで終了します。
+
+Grafana Cloud UI で確認する項目:
+
+- datasource `DuckDB Query API` の URL が `query_api_url` を指している
+- dashboard `microCMS Content Ops Analytics` が表示される
+- Calendar Heatmap, API Activity, Top Updated Contents, Average Time to Publish by API, Average Draft to Publish by API の 5 パネルが plugin / datasource error にならない
+
+## 7. ドメイン設定について
 
 今回の初期デプロイは public ALB HTTP 公開までです。
 
@@ -137,7 +185,7 @@ Grafana から見る場合は、ローカル Grafana の datasource URL を `que
 独自ドメイン、HTTPS、ACM certificate、Route 53、WAF、認証はこの手順の対象外です。
 必要になった場合は、ALB listener を HTTPS 化し、Route 53 alias record と ACM certificate を追加してください。
 
-## 7. 更新デプロイ
+## 8. 更新デプロイ
 
 コード変更後に同じ tag で再デプロイする場合:
 
@@ -153,7 +201,13 @@ tag を変える場合:
 IMAGE_TAG=$(git rev-parse --short HEAD) just deploy-all
 ```
 
-## 8. 削除
+Grafana Cloud datasource / dashboard も更新する場合は、AWS 更新後に再度実行します。
+
+```bash
+just deploy-grafana-cloud
+```
+
+## 9. 削除
 
 main stack を削除します。
 

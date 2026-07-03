@@ -43,6 +43,7 @@ validate:
     env 'EVENTS_PATH=s3://example-bucket/microcms_events/**/*.parquet' {{compose}} config >/dev/null
     env NGROK_AUTHTOKEN="${NGROK_AUTHTOKEN:-dummy}" {{local_compose}} config >/dev/null
     ./scripts/validate-grafana-dashboard.sh grafana/dashboards/microcms-content-ops-analytics.json
+    ./scripts/test-deploy-grafana-cloud.sh
 
 # Run the local equivalent of the GitHub Actions static verification suite.
 check-ci:
@@ -218,6 +219,10 @@ deploy-all: bootstrap ecr-login docker-build-aws docker-push-aws deploy
 # Show AWS OpenTofu outputs.
 deploy-outputs:
     tofu -chdir={{aws_dir}} output
+
+# Provision the existing Grafana Cloud stack with the deployed Query API datasource and dashboard.
+deploy-grafana-cloud:
+    ./scripts/deploy-grafana-cloud.sh grafana/dashboards/microcms-content-ops-analytics.json
 
 # Destroy the AWS OpenTofu stack. This is intentionally separate from deploy.
 deploy-destroy:

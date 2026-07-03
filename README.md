@@ -164,6 +164,7 @@ Grafana は DuckDB Query API の JSON レスポンスを可視化します。
 Calendar Heatmap には [`tim012432-calendarheatmap-panel`](https://grafana.com/grafana/plugins/tim012432-calendarheatmap-panel/) を使います。
 Calendar Heatmap の日付バケットは S3 パーティション `dt` と同じ JST カレンダー日です。
 Grafana 自体には分析対象データを保存しません。
+ローカル実行では Docker Compose の file provisioning を使い、AWS デプロイ後は既存 Grafana Cloud stack へ datasource と dashboard を反映できます。
 
 ```text
 Grafana = 可視化
@@ -220,6 +221,17 @@ AWS 認証情報はローカルの credential chain を利用します。
 | `DUCKDB_EXTENSION_DIRECTORY` | no | `/tmp/duckdb_extensions` | DuckDB extension の保存先 |
 | `PORT` | no | `8000` | HTTP server port |
 
+### Grafana Cloud provisioning
+
+| 変数名 | 必須 | 既定値 | 説明 |
+| --- | --- | --- | --- |
+| `GRAFANA_STACK_URL` | yes | なし | 既存 Grafana Cloud stack URL |
+| `GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN` | yes | なし | datasource / dashboard を書き込める service account token |
+| `QUERY_API_URL` | no | OpenTofu output `query_api_url` | datasource に設定する DuckDB Query API URL |
+| `GRAFANA_DASHBOARD_UID` | no | `microcms-content-ops` | upsert する dashboard uid |
+| `GRAFANA_FOLDER_UID` | no | なし | dashboard 配置先 folder uid |
+| `GRAFANA_SKIP_PLUGIN_CHECK` | no | `0` | `1` の場合だけ Grafana plugin 確認を skip |
+
 ## テスト
 
 ```bash
@@ -275,6 +287,7 @@ GitHub Actions の `uses:` は supply-chain risk を抑えるため、tag では
 | `just deploy-all` | ECR bootstrap、image build/push、AWS deploy を一括実行 |
 | `just deploy-plan` | 実 AWS 向け OpenTofu plan |
 | `just deploy` | 実 AWS 向け OpenTofu apply |
+| `just deploy-grafana-cloud` | 既存 Grafana Cloud stack に datasource と dashboard を反映 |
 
 ## ローカル起動
 
