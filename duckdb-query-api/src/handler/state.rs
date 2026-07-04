@@ -1,10 +1,11 @@
 use crate::ApiError;
-use crate::config::AppConfig;
+use crate::config::{AppConfig, McpConfig};
 use crate::storage::DuckDbEngine;
 
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) duckdb: DuckDbEngine,
+    pub(crate) mcp_config: Option<McpConfig>,
 }
 
 impl AppState {
@@ -18,6 +19,9 @@ impl AppState {
             config.duckdb_s3_use_ssl,
         )?;
 
-        Ok(Self { duckdb })
+        Ok(Self {
+            duckdb,
+            mcp_config: config.mcp_config()?,
+        })
     }
 }

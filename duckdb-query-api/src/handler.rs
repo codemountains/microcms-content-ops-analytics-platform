@@ -1,7 +1,9 @@
+mod mcp;
 mod routes;
 mod state;
 mod validation;
 
+pub(crate) use mcp::router as mcp_router;
 pub(crate) use routes::app;
 pub(crate) use state::AppState;
 pub(crate) use validation::{

@@ -25,8 +25,14 @@ mod tests {
     use std::fs;
 
     use ::duckdb::Connection;
+    use axum::{
+        body::{Body, to_bytes},
+        http::{Request, StatusCode, header},
+    };
     use chrono::{Duration, NaiveDate, TimeZone, Utc};
+    use serde_json::{Value, json};
     use tempfile::tempdir;
+    use tower::ServiceExt;
 
     use crate::handler::PublishDurationUnit;
     use crate::query::{
@@ -36,9 +42,36 @@ mod tests {
         query_top_updated_contents_rows,
     };
     use crate::storage::{DuckDbEngine, sql_string_literal};
+    use crate::{ApiError, AppConfig};
 
     const SMOKE_BLOG_LIFECYCLE_CONTENT_ULID: &str = "01J1DVG0000000000000000001";
     const SMOKE_BLOG_DIRECT_CONTENT_ULID: &str = "01J1DVG0000000000000000002";
+    const MCP_TOKEN: &str = "test-mcp-token";
+    const MCP_ORIGIN: &str = "http://localhost:8000";
+
+    fn test_config(events_path: String, extension_directory: String) -> AppConfig {
+        AppConfig {
+            events_path,
+            aws_region: "ap-northeast-1".to_owned(),
+            duckdb_extension_directory: extension_directory,
+            duckdb_s3_endpoint: None,
+            duckdb_s3_url_style: "vhost".to_owned(),
+            duckdb_s3_use_ssl: true,
+            port: 8000,
+            mcp_enabled: false,
+            mcp_bearer_token: None,
+            mcp_allowed_origins: Vec::new(),
+        }
+    }
+
+    fn test_mcp_config(events_path: String, extension_directory: String) -> AppConfig {
+        AppConfig {
+            mcp_enabled: true,
+            mcp_bearer_token: Some(MCP_TOKEN.to_owned()),
+            mcp_allowed_origins: vec![MCP_ORIGIN.to_owned()],
+            ..test_config(events_path, extension_directory)
+        }
+    }
 
     #[tokio::test]
     async fn queries_refreshed_metrics_from_local_hive_partitioned_parquet() {
@@ -363,6 +396,289 @@ mod tests {
                 && row.republish_from_closed_count == 0
                 && row.publish_count == 2
         }));
+
+        let app = crate::try_app(test_mcp_config(
+            events_path,
+            extension_dir.to_string_lossy().into(),
+        ))
+        .unwrap();
+        let session_id = initialize_mcp_session(app.clone()).await;
+        let response = app
+            .oneshot(
+                authorized_mcp_request(json!({
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "calendar_heatmap",
+                        "arguments": {
+                            "from": from_ms,
+                            "to": to_ms
+                        }
+                    }
+                }))
+                .with_header("mcp-session-id", session_id),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json_or_sse(response.into_body()).await;
+        let structured = &body["result"]["structuredContent"];
+        let rows = structured["rows"].as_array().unwrap();
+        assert!(rows.iter().any(|row| {
+            row["time"] == format_partition_time(&event_date.to_string()) && row["value"] == 10
+        }));
+        assert_eq!(body["result"]["content"][0]["text"], structured.to_string());
+    }
+
+    #[tokio::test]
+    async fn mcp_endpoint_is_not_mounted_by_default() {
+        let tempdir = tempdir().unwrap();
+        let app = crate::try_app(test_config(
+            format!("{}/missing/**/*.parquet", tempdir.path().display()),
+            tempdir
+                .path()
+                .join("duckdb_extensions")
+                .to_string_lossy()
+                .into(),
+        ))
+        .unwrap();
+
+        let response = app
+            .oneshot(Request::builder().uri("/mcp").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn mcp_enabled_requires_token_and_allowed_origins() {
+        let tempdir = tempdir().unwrap();
+        let mut config = test_config(
+            format!("{}/missing/**/*.parquet", tempdir.path().display()),
+            tempdir
+                .path()
+                .join("duckdb_extensions")
+                .to_string_lossy()
+                .into(),
+        );
+        config.mcp_enabled = true;
+        config.mcp_allowed_origins = vec![MCP_ORIGIN.to_owned()];
+
+        assert!(matches!(
+            crate::try_app(config),
+            Err(ApiError::MissingEnv("MCP_BEARER_TOKEN"))
+        ));
+
+        let mut config = test_config(
+            format!("{}/missing/**/*.parquet", tempdir.path().display()),
+            tempdir
+                .path()
+                .join("duckdb_extensions")
+                .to_string_lossy()
+                .into(),
+        );
+        config.mcp_enabled = true;
+        config.mcp_bearer_token = Some(MCP_TOKEN.to_owned());
+
+        assert!(matches!(
+            crate::try_app(config),
+            Err(ApiError::MissingEnv("MCP_ALLOWED_ORIGINS"))
+        ));
+    }
+
+    #[tokio::test]
+    async fn mcp_endpoint_requires_bearer_token_and_allowed_origin() {
+        let tempdir = tempdir().unwrap();
+        let app = crate::try_app(test_mcp_config(
+            format!("{}/missing/**/*.parquet", tempdir.path().display()),
+            tempdir
+                .path()
+                .join("duckdb_extensions")
+                .to_string_lossy()
+                .into(),
+        ))
+        .unwrap();
+
+        let missing_auth = app
+            .clone()
+            .oneshot(
+                mcp_request(json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}))
+                    .with_header(header::ORIGIN, MCP_ORIGIN),
+            )
+            .await
+            .unwrap();
+        assert_eq!(missing_auth.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            missing_auth
+                .headers()
+                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                .unwrap(),
+            MCP_ORIGIN
+        );
+
+        let wrong_origin = app
+            .oneshot(
+                mcp_request(json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}))
+                    .map(|body| body)
+                    .with_header(header::AUTHORIZATION, "Bearer test-mcp-token")
+                    .with_header(header::ORIGIN, "https://example.com"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(wrong_origin.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn mcp_endpoint_allows_cors_preflight_for_allowed_origin() {
+        let tempdir = tempdir().unwrap();
+        let app = crate::try_app(test_mcp_config(
+            format!("{}/missing/**/*.parquet", tempdir.path().display()),
+            tempdir
+                .path()
+                .join("duckdb_extensions")
+                .to_string_lossy()
+                .into(),
+        ))
+        .unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("OPTIONS")
+                    .uri("/mcp")
+                    .header(header::HOST, "localhost")
+                    .header(header::ORIGIN, MCP_ORIGIN)
+                    .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                    .header(
+                        header::ACCESS_CONTROL_REQUEST_HEADERS,
+                        "authorization, mcp-protocol-version",
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                .unwrap(),
+            MCP_ORIGIN
+        );
+        assert!(
+            response
+                .headers()
+                .get(header::ACCESS_CONTROL_ALLOW_HEADERS)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .contains("authorization")
+        );
+    }
+
+    #[tokio::test]
+    async fn mcp_initialize_exposes_session_header_to_browser_clients() {
+        let tempdir = tempdir().unwrap();
+        let app = crate::try_app(test_mcp_config(
+            format!("{}/missing/**/*.parquet", tempdir.path().display()),
+            tempdir
+                .path()
+                .join("duckdb_extensions")
+                .to_string_lossy()
+                .into(),
+        ))
+        .unwrap();
+
+        let response = app
+            .oneshot(authorized_mcp_request(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "duckdb-query-api-test",
+                        "version": "0.1.0"
+                    }
+                }
+            })))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.headers().contains_key("mcp-session-id"));
+        assert!(
+            response
+                .headers()
+                .get(header::ACCESS_CONTROL_EXPOSE_HEADERS)
+                .and_then(|value| value.to_str().ok())
+                .is_some_and(|value| value
+                    .split(',')
+                    .any(|header| header.trim().eq_ignore_ascii_case("mcp-session-id")))
+        );
+    }
+
+    #[tokio::test]
+    async fn mcp_tools_list_exposes_fixed_metric_tools() {
+        let tempdir = tempdir().unwrap();
+        let app = crate::try_app(test_mcp_config(
+            format!("{}/missing/**/*.parquet", tempdir.path().display()),
+            tempdir
+                .path()
+                .join("duckdb_extensions")
+                .to_string_lossy()
+                .into(),
+        ))
+        .unwrap();
+
+        let session_id = initialize_mcp_session(app.clone()).await;
+
+        let tools = app
+            .oneshot(
+                authorized_mcp_request(json!({
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/list",
+                    "params": {}
+                }))
+                .with_header("mcp-session-id", session_id),
+            )
+            .await
+            .unwrap();
+        assert_eq!(tools.status(), StatusCode::OK);
+        let body: Value = response_json_or_sse(tools.into_body()).await;
+        let mut tool_names: Vec<&str> = body["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap())
+            .collect();
+        tool_names.sort_unstable();
+        assert!(
+            body["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|tool| tool["annotations"]["readOnlyHint"] == true)
+        );
+
+        assert_eq!(
+            tool_names,
+            vec![
+                "api_activity",
+                "average_draft_to_publish_by_api",
+                "average_time_to_publish_by_api",
+                "calendar_heatmap",
+                "publish_action_summary",
+                "publish_action_trend",
+                "top_updated_contents",
+            ]
+        );
     }
 
     #[tokio::test]
@@ -426,5 +742,84 @@ mod tests {
             })
             .await
             .unwrap();
+    }
+
+    fn mcp_request(body: Value) -> Request<Body> {
+        Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header(header::ACCEPT, "application/json, text/event-stream")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::HOST, "localhost")
+            .header("mcp-protocol-version", "2025-06-18")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    }
+
+    fn authorized_mcp_request(body: Value) -> Request<Body> {
+        mcp_request(body)
+            .with_header(header::AUTHORIZATION, format!("Bearer {MCP_TOKEN}"))
+            .with_header(header::ORIGIN, MCP_ORIGIN)
+    }
+
+    async fn initialize_mcp_session(app: axum::Router) -> String {
+        let initialize = app
+            .oneshot(authorized_mcp_request(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "duckdb-query-api-test",
+                        "version": "0.1.0"
+                    }
+                }
+            })))
+            .await
+            .unwrap();
+        assert_eq!(initialize.status(), StatusCode::OK);
+        initialize
+            .headers()
+            .get("mcp-session-id")
+            .expect("initialize response should include Mcp-Session-Id")
+            .to_str()
+            .unwrap()
+            .to_owned()
+    }
+
+    async fn response_json_or_sse(body: Body) -> Value {
+        let bytes = to_bytes(body, usize::MAX).await.unwrap();
+        if let Ok(json) = serde_json::from_slice(&bytes) {
+            return json;
+        }
+
+        let text = String::from_utf8(bytes.to_vec()).unwrap();
+        text.lines()
+            .filter_map(|line| line.strip_prefix("data: "))
+            .find_map(|data| serde_json::from_str(data).ok())
+            .unwrap_or_else(|| panic!("SSE response should include a JSON data line: {text}"))
+    }
+
+    trait RequestHeaderExt {
+        fn with_header<K, V>(self, key: K, value: V) -> Self
+        where
+            K: header::IntoHeaderName,
+            V: TryInto<header::HeaderValue>,
+            V::Error: std::fmt::Debug;
+    }
+
+    impl RequestHeaderExt for Request<Body> {
+        fn with_header<K, V>(mut self, key: K, value: V) -> Self
+        where
+            K: header::IntoHeaderName,
+            V: TryInto<header::HeaderValue>,
+            V::Error: std::fmt::Debug,
+        {
+            self.headers_mut()
+                .insert(key, value.try_into().expect("valid header value"));
+            self
+        }
     }
 }

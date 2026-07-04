@@ -450,6 +450,34 @@ Grafana ダッシュボードでは Infinity datasource の backend-interpolated
 ]
 ```
 
+#### `POST /mcp`, `GET /mcp`
+
+任意有効化された MCP Streamable HTTP endpoint。
+MCP client は JSON-RPC 2.0 の `initialize`、`tools/list`、`tools/call` を使い、既存の固定 metrics を read-only tool として呼び出せる。
+`/mcp` は `MCP_ENABLED=true` の場合だけ mount し、既定では提供しない。
+
+v1 で公開する tool は次の 7 つとする。
+
+| Tool | Arguments | 既存 REST API |
+| --- | --- | --- |
+| `calendar_heatmap` | `from`, `to` | `/metrics/calendar-heatmap` |
+| `publish_action_summary` | `from`, `to` | `/metrics/publish-action-summary` |
+| `publish_action_trend` | `from`, `to` | `/metrics/publish-action-trend` |
+| `api_activity` | `from`, `to` | `/metrics/api-activity` |
+| `top_updated_contents` | `from`, `to`, `limit` | `/metrics/top-updated-contents` |
+| `average_time_to_publish_by_api` | `from`, `to`, `unit` | `/metrics/average-time-to-publish-by-api` |
+| `average_draft_to_publish_by_api` | `from`, `to`, `unit` | `/metrics/average-draft-to-publish-by-api` |
+
+Arguments は対応する REST API の query parameter と同じ型・既定値・validation を使う。
+tool result は `structuredContent.rows` に REST API と同じ JSON 配列を返し、互換性のため `content[0].text` に `structuredContent` 全体と同じ JSON 文字列を返す。
+MCP でも任意 SQL tool は提供しない。
+
+Security:
+
+- `Authorization: Bearer <MCP_BEARER_TOKEN>` を必須とする。不一致は `401 Unauthorized`。
+- `Origin` header は `MCP_ALLOWED_ORIGINS` の comma-separated exact match とし、欠落または不一致は `403 Forbidden`。
+- ECS / ALB で `/mcp` を外部公開する運用は v1 スコープ外とする。
+
 ### 5.2.4 環境変数
 
 | 変数名 | 必須 | 説明 |
@@ -457,6 +485,9 @@ Grafana ダッシュボードでは Infinity datasource の backend-interpolated
 | `EVENTS_PATH` | yes | `read_parquet()` で読む S3 path |
 | `AWS_REGION` | no | S3 bucket の region。既定値は `ap-northeast-1` |
 | `PORT` | no | HTTP server port。既定値は `8000` |
+| `MCP_ENABLED` | no | `true` の場合だけ `/mcp` を有効化する。既定値は `false` |
+| `MCP_BEARER_TOKEN` | MCP 有効時 yes | `/mcp` で要求する bearer token |
+| `MCP_ALLOWED_ORIGINS` | MCP 有効時 yes | `/mcp` で許可する `Origin`。comma-separated exact match |
 
 `EVENTS_PATH` example:
 

@@ -10,6 +10,8 @@ anyhow.workspace = true
 axum = "0.8"
 chrono.workspace = true
 duckdb = { version = "1", features = ["bundled"] }
+rmcp = { version = "2.1", features = ["server", "macros", "schemars", "transport-streamable-http-server"] }
+schemars = "1"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -19,3 +21,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 [dev-dependencies]
 tempfile = "3"
+tower = "0.5"

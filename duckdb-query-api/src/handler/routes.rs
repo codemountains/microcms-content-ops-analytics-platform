@@ -5,7 +5,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{AppState, validate_limit, validate_publish_duration_unit, validate_time_range};
+use super::{
+    AppState, mcp_router, validate_limit, validate_publish_duration_unit, validate_time_range,
+};
 use crate::ApiError;
 use crate::query::{
     ApiActivityRow, AverageDraftToPublishRow, AverageTimeToPublishRow, CalendarHeatmapRow,
@@ -41,7 +43,8 @@ struct HealthResponse {
 }
 
 pub(crate) fn app(state: AppState) -> Result<Router, ApiError> {
-    Ok(Router::new()
+    let mcp_config = state.mcp_config.clone();
+    let router = Router::new()
         .route("/health", get(health))
         .route("/metrics/calendar-heatmap", get(calendar_heatmap))
         .route(
@@ -59,7 +62,12 @@ pub(crate) fn app(state: AppState) -> Result<Router, ApiError> {
             "/metrics/average-draft-to-publish-by-api",
             get(average_draft_to_publish_by_api),
         )
-        .with_state(state))
+        .with_state(state.clone());
+
+    Ok(match mcp_config {
+        Some(config) => router.merge(mcp_router(state, config)),
+        None => router,
+    })
 }
 
 async fn health() -> Json<HealthResponse> {
