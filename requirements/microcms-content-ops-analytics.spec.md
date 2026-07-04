@@ -803,7 +803,7 @@ Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Polic
 API Activity は `/metrics/api-activity?days=30` の 14 種 count を Infinity datasource で取得し、Grafana transformation で 4 カテゴリ（`draft_activity` / `publish_activity` / `unpublish_activity` / `delete_activity`）に集約して stacked series として表示する。dashboard variable `api_activity_view` が詳細表示のときは `initial_draft_count` から `delete_closed_count` までの 14 系列を stacked bar で表示する。集約ルールは §6.2.1 に従う。
 Operation Category Breakdown は同じ `/metrics/api-activity?days=30` を再利用し、Grafana transformation で全 API を合算して 4 カテゴリの合計を求め、Pie chart の slice として表示する。`api_activity_view` の影響は受けず、常に 4 カテゴリ固定とする。
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
-Weekly Publish Count と Weekly Published State Rate は Calendar Heatmap の直下に横並びで配置し、その下に API Activity、さらにその下に Publish Action Trend を全幅で配置する。
+API Activity を最上部に全幅で配置し、その直下に Publish Action Trend を全幅で配置する。さらにその下に Weekly Publish Count と Weekly Published State Rate を横並びで配置する。Calendar Heatmap は最下部に全幅で配置する。
 Weekly Publish Count は `/metrics/publish-action-summary?days=7` の `publish_count`、Weekly Published State Rate は同 API（`days=7`）の `published_state_rate` を描画する。
 Publish Action Trend は `/metrics/publish-action-trend?from=${__timeFrom}&to=${__timeTo}` の `publish_from_draft_count`、`initial_publish_count`、`republish_from_closed_count` を stacked bar として描画する。
 Calendar Heatmap と Publish Action Trend では、ダッシュボードの time range（既定 `now-365d`）を Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` として API に渡す。
