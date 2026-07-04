@@ -658,7 +658,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "公開→下書き"
+                "value": "公開から下書き"
               },
               {
                 "id": "color",
@@ -677,7 +677,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "公開→非公開"
+                "value": "公開から非公開"
               },
               {
                 "id": "color",
@@ -696,7 +696,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "非公開→下書き"
+                "value": "非公開から下書き"
               },
               {
                 "id": "color",
