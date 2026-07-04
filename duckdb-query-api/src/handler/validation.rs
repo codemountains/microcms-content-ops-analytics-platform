@@ -1,18 +1,5 @@
 use crate::ApiError;
 
-pub(crate) fn validate_days(days: Option<u32>) -> Result<u32, ApiError> {
-    validate_days_with_default(days, 30)
-}
-
-fn validate_days_with_default(days: Option<u32>, default: u32) -> Result<u32, ApiError> {
-    let days = days.unwrap_or(default);
-    if (1..=3660).contains(&days) {
-        Ok(days)
-    } else {
-        Err(ApiError::InvalidQuery("days must be between 1 and 3660"))
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PublishDurationUnit {
     Days,
@@ -61,12 +48,22 @@ pub(crate) fn validate_time_range(
 ) -> Result<(i64, i64), ApiError> {
     match (from, to) {
         (Some(from_ms), Some(to_ms)) => {
+            if chrono::DateTime::<chrono::Utc>::from_timestamp_millis(from_ms).is_none()
+                || chrono::DateTime::<chrono::Utc>::from_timestamp_millis(to_ms).is_none()
+            {
+                return Err(ApiError::InvalidQuery(
+                    "from and to must be valid Unix epoch milliseconds",
+                ));
+            }
             if from_ms > to_ms {
                 return Err(ApiError::InvalidQuery(
                     "from must be less than or equal to to",
                 ));
             }
-            if to_ms - from_ms > MAX_CALENDAR_RANGE_MS {
+            if to_ms
+                .checked_sub(from_ms)
+                .is_none_or(|range_ms| range_ms > MAX_CALENDAR_RANGE_MS)
+            {
                 return Err(ApiError::InvalidQuery(
                     "time range must not exceed 3660 days",
                 ));
@@ -112,13 +109,9 @@ mod tests {
     }
 
     #[test]
-    fn validates_days() {
-        assert_eq!(validate_days(None).unwrap(), 30);
-        assert_eq!(validate_days_with_default(None, 365).unwrap(), 365);
-        assert_eq!(validate_days(Some(1)).unwrap(), 1);
-        assert_eq!(validate_days(Some(3660)).unwrap(), 3660);
-        assert!(validate_days(Some(0)).is_err());
-        assert!(validate_days(Some(3661)).is_err());
+    fn rejects_overflowing_or_unrepresentable_time_ranges() {
+        assert!(validate_time_range(Some(i64::MIN), Some(i64::MAX)).is_err());
+        assert!(validate_time_range(Some(i64::MAX - 1), Some(i64::MAX)).is_err());
     }
 
     #[test]

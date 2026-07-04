@@ -235,7 +235,11 @@ Query parameters:
 
 | Parameter | Default | 説明 |
 | --- | --- | --- |
-| `days` | `30` | 集計対象期間 |
+| `from` | なし | 集計開始時刻（Unix epoch ミリ秒）。`to` とセットで指定する |
+| `to` | なし | 集計終了時刻（Unix epoch ミリ秒）。`from` とセットで指定する |
+
+`from` / `to` を省略した場合は、直近 365 日を返す。
+Grafana ダッシュボードでは Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` を渡す。
 
 Response example:
 
@@ -275,7 +279,11 @@ Query parameters:
 
 | Parameter | Default | 説明 |
 | --- | --- | --- |
-| `days` | `30` | 集計対象期間。直近1週間の公開数 / 公開状態率パネルでは `7` を指定する |
+| `from` | なし | 集計開始時刻（Unix epoch ミリ秒）。`to` とセットで指定する |
+| `to` | なし | 集計終了時刻（Unix epoch ミリ秒）。`from` とセットで指定する |
+
+`from` / `to` を省略した場合は、直近 365 日を返す。
+Grafana ダッシュボードでは Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` を渡す。
 
 Response example:
 
@@ -330,8 +338,12 @@ Query parameters:
 
 | Parameter | Default | 説明 |
 | --- | --- | --- |
-| `days` | `30` | 集計対象期間 |
+| `from` | なし | 集計開始時刻（Unix epoch ミリ秒）。`to` とセットで指定する |
+| `to` | なし | 集計終了時刻（Unix epoch ミリ秒）。`from` とセットで指定する |
 | `limit` | `20` | 返却件数 |
+
+`from` / `to` を省略した場合は、直近 365 日を返す。
+Grafana ダッシュボードでは Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` を渡す。
 
 Response example:
 
@@ -356,8 +368,12 @@ Query parameters:
 
 | Parameter | Default | 説明 |
 | --- | --- | --- |
-| `days` | `30` | 集計対象期間 |
+| `from` | なし | 集計開始時刻（Unix epoch ミリ秒）。`to` とセットで指定する |
+| `to` | なし | 集計終了時刻（Unix epoch ミリ秒）。`from` とセットで指定する |
 | `unit` | `days` | `days` または `hours` |
+
+`from` / `to` を省略した場合は、直近 365 日を返す。
+Grafana ダッシュボードでは Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` を渡す。
 
 レスポンスは Grafana Infinity datasource が各 column を同じ長さの field として扱えるよう、`avg_days` と `avg_hours` の両方を返す。
 選択していない unit の field は `null` とする。
@@ -398,8 +414,12 @@ Query parameters:
 
 | Parameter | Default | 説明 |
 | --- | --- | --- |
-| `days` | `30` | 集計対象期間 |
+| `from` | なし | 集計開始時刻（Unix epoch ミリ秒）。`to` とセットで指定する |
+| `to` | なし | 集計終了時刻（Unix epoch ミリ秒）。`from` とセットで指定する |
 | `unit` | `days` | `days` または `hours` |
+
+`from` / `to` を省略した場合は、直近 365 日を返す。
+Grafana ダッシュボードでは Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` を渡す。
 
 レスポンスは Grafana Infinity datasource が各 column を同じ長さの field として扱えるよう、`avg_days` と `avg_hours` の両方を返す。
 選択していない unit の field は `null` とする。`sample_count` は平均算出件数の確認用であり、duration chart では描画しない。
@@ -564,6 +584,11 @@ ORDER BY calendar.dt;
 ## 7.2 API Activity
 
 ```sql
+WITH bounds AS (
+  SELECT
+    CAST(epoch_ms(<from_ms>) + INTERVAL '9 HOURS' AS DATE) AS start_date,
+    CAST(epoch_ms(<to_ms>) + INTERVAL '9 HOURS' AS DATE) AS end_date
+)
 SELECT
   api,
   SUM(CASE WHEN event_kind = 'INITIAL_DRAFT' THEN 1 ELSE 0 END) AS initial_draft_count,
@@ -586,7 +611,9 @@ FROM read_parquet(
   hive_partitioning = true,
   union_by_name = true
 )
-WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) - INTERVAL 29 DAY
+WHERE
+  dt >= (SELECT start_date FROM bounds)
+  AND dt <= (SELECT end_date FROM bounds)
 GROUP BY api
 ORDER BY total_count DESC, api;
 ```
@@ -596,8 +623,8 @@ ORDER BY total_count DESC, api;
 ```sql
 WITH bounds AS (
   SELECT
-    CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) - INTERVAL 0 DAY AS start_date,
-    CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) AS end_date
+    CAST(epoch_ms(<from_ms>) + INTERVAL '9 HOURS' AS DATE) AS start_date,
+    CAST(epoch_ms(<to_ms>) + INTERVAL '9 HOURS' AS DATE) AS end_date
 ),
 summary AS (
   SELECT
@@ -624,7 +651,7 @@ SELECT
 FROM summary;
 ```
 
-`days=1` の場合は `INTERVAL 0 DAY`、`days=30` の場合は `INTERVAL 29 DAY` のように、対象期間は JST の `dt` に対して開始日・終了日の両端を含める。
+対象期間は JST の `dt` に対して開始日・終了日の両端を含める。
 
 ## 7.4 Publish Action Trend
 
@@ -672,6 +699,11 @@ ORDER BY calendar.dt;
 ## 7.5 Top Updated Contents
 
 ```sql
+WITH bounds AS (
+  SELECT
+    CAST(epoch_ms(<from_ms>) + INTERVAL '9 HOURS' AS DATE) AS start_date,
+    CAST(epoch_ms(<to_ms>) + INTERVAL '9 HOURS' AS DATE) AS end_date
+)
 SELECT
   api,
   content_id,
@@ -683,7 +715,8 @@ FROM read_parquet(
   union_by_name = true
 )
 WHERE
-  dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) - INTERVAL 29 DAY
+  dt >= (SELECT start_date FROM bounds)
+  AND dt <= (SELECT end_date FROM bounds)
   AND event_type IN ('new', 'edit')
   AND content_id IS NOT NULL
 GROUP BY api, content_id
@@ -694,6 +727,11 @@ LIMIT 20;
 ## 7.6 Average Time to Publish by API
 
 ```sql
+WITH bounds AS (
+  SELECT
+    CAST(epoch_ms(<from_ms>) + INTERVAL '9 HOURS' AS DATE) AS start_date,
+    CAST(epoch_ms(<to_ms>) + INTERVAL '9 HOURS' AS DATE) AS end_date
+)
 SELECT
   api,
   AVG(date_diff('second', content_created_at, content_published_at) / 86400.0) AS avg_days
@@ -703,7 +741,8 @@ FROM read_parquet(
   union_by_name = true
 )
 WHERE
-  dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) - INTERVAL 29 DAY
+  dt >= (SELECT start_date FROM bounds)
+  AND dt <= (SELECT end_date FROM bounds)
   AND event_kind IN ('PUBLISH_FROM_DRAFT', 'INITIAL_PUBLISH', 'REPUBLISH_FROM_CLOSED')
   AND content_created_at IS NOT NULL
   AND content_published_at IS NOT NULL
@@ -717,7 +756,12 @@ ORDER BY avg_days DESC, api;
 ## 7.7 Average Draft to Publish by API
 
 ```sql
-WITH drafts AS (
+WITH bounds AS (
+  SELECT
+    CAST(epoch_ms(<from_ms>) + INTERVAL '9 HOURS' AS DATE) AS start_date,
+    CAST(epoch_ms(<to_ms>) + INTERVAL '9 HOURS' AS DATE) AS end_date
+),
+drafts AS (
   SELECT
     api,
     content_id,
@@ -744,7 +788,8 @@ publishes_from_draft AS (
     union_by_name = true
   )
   WHERE
-    dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) - INTERVAL 29 DAY
+    dt >= (SELECT start_date FROM bounds)
+    AND dt <= (SELECT end_date FROM bounds)
     AND event_kind = 'PUBLISH_FROM_DRAFT'
     AND content_id IS NOT NULL
     AND content_published_at IS NOT NULL
@@ -776,8 +821,8 @@ Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Polic
 | パネル | API | 可視化形式 |
 | --- | --- | --- |
 | Calendar Heatmap | `/metrics/calendar-heatmap` | `tim012432-calendarheatmap-panel` |
-| Weekly Publish Count | `/metrics/publish-action-summary` | Stat |
-| Weekly Published State Rate | `/metrics/publish-action-summary` | Gauge |
+| Publish Count | `/metrics/publish-action-summary` | Stat |
+| Published State Rate | `/metrics/publish-action-summary` | Gauge |
 | Publish Action Trend | `/metrics/publish-action-trend` | Time series |
 | API Activity | `/metrics/api-activity` | Stacked Bar Chart |
 | Top Updated Contents | `/metrics/top-updated-contents` | Table |
@@ -791,30 +836,30 @@ Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Polic
 | パネル | description に含める指標定義 |
 | --- | --- |
 | Calendar Heatmap | Webhook 受信日（S3 パーティション `dt`、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）で絞り込み、0 件の日も表示する。 |
-| Weekly Publish Count | 直近1週間（7日）の `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` の合計数。日付境界は JST の `dt` partition に揃える。 |
-| Weekly Published State Rate | 直近1週間（7日）の状態到達・維持イベントのうち公開状態に到達・維持した割合。分子は `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `REPUBLISH_FROM_CLOSED`、分母は `INITIAL_DRAFT` / `SAVE_DRAFT` / `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `UNPUBLISH_TO_DRAFT` / `UNPUBLISH_TO_CLOSED` / `REOPEN_TO_DRAFT` / `REPUBLISH_FROM_CLOSED` とする。`ADD_DRAFT_TO_PUBLISHED` / `DISCARD_DRAFT_ON_PUBLISHED` / `DELETE_*` は除外し、分母が 0 件の場合は `null` とする。 |
+| Publish Count | ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）内にある `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` の合計数。日付境界は JST の `dt` partition に揃える。 |
+| Published State Rate | ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）内にある状態到達・維持イベントのうち公開状態に到達・維持した割合。分子は `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `REPUBLISH_FROM_CLOSED`、分母は `INITIAL_DRAFT` / `SAVE_DRAFT` / `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `UPDATE_PUBLISHED` / `UNPUBLISH_TO_DRAFT` / `UNPUBLISH_TO_CLOSED` / `REOPEN_TO_DRAFT` / `REPUBLISH_FROM_CLOSED` とする。`ADD_DRAFT_TO_PUBLISHED` / `DISCARD_DRAFT_ON_PUBLISHED` / `DELETE_*` は除外し、分母が 0 件の場合は `null` とする。 |
 | Publish Action Trend | 日別の `PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` 件数。ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）で絞り込み、Time series の bar 表示で stacked series とし、0 件の日も表示する。 |
-| API Activity | API ごとの `event_kind` 件数（直近 30 日）。既定は 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）を horizontal stacked bar で表示する。`api_activity_view` で 14 種の詳細内訳に切り替えられる。 |
-| Top Updated Contents | `event_type IN ('new', 'edit')` かつ `content_id` があるイベントを対象に、更新回数が多いコンテンツ上位 20 件（直近 30 日）を表示する。`updated_count` は API の `count`、`last_event_at` は最終イベント時刻。 |
-| Average Time to Publish by API | API ごとに、コンテンツ作成（`publishValue.createdAt`）から公開到達（`publishValue.publishedAt`）までの平均所要時間を表示する。`PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` を対象（直近 30 日）にし、`publish_duration_unit` で日数 / 時間を切り替える。 |
-| Average Draft to Publish by API | API ごとに、下書き作成（`draftValue.createdAt`）から下書き経由公開（`publishValue.publishedAt`）までの平均所要時間を表示する。同一 `api` / `content_id` の `INITIAL_DRAFT` と `PUBLISH_FROM_DRAFT` を結合する。期間フィルタは `PUBLISH_FROM_DRAFT` 側の `dt` に適用する（直近 30 日）。 |
-| Operation Category Breakdown | 直近 30 日の全 API を合算し、`event_kind` を 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）に集約した操作構成比を Pie chart で表示する。カテゴリ定義は §6.2.1 に従う。 |
+| API Activity | API ごとの `event_kind` 件数。ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）で絞り込み、既定は 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）を horizontal stacked bar で表示する。`api_activity_view` で 14 種の詳細内訳に切り替えられる。 |
+| Top Updated Contents | `event_type IN ('new', 'edit')` かつ `content_id` があるイベントを対象に、ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）内で更新回数が多いコンテンツ上位 20 件を表示する。`updated_count` は API の `count`、`last_event_at` は最終イベント時刻。 |
+| Average Time to Publish by API | API ごとに、コンテンツ作成（`publishValue.createdAt`）から公開到達（`publishValue.publishedAt`）までの平均所要時間を表示する。`PUBLISH_FROM_DRAFT` / `INITIAL_PUBLISH` / `REPUBLISH_FROM_CLOSED` を対象にダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）で絞り込み、`publish_duration_unit` で日数 / 時間を切り替える。 |
+| Average Draft to Publish by API | API ごとに、下書き作成（`draftValue.createdAt`）から下書き経由公開（`publishValue.publishedAt`）までの平均所要時間を表示する。同一 `api` / `content_id` の `INITIAL_DRAFT` と `PUBLISH_FROM_DRAFT` を結合する。期間フィルタは `PUBLISH_FROM_DRAFT` 側の `dt` に適用し、ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）で絞り込む。 |
+| Operation Category Breakdown | ダッシュボードの time range（`${__timeFrom}` / `${__timeTo}`）内の全 API を合算し、`event_kind` を 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）に集約した操作構成比を Pie chart で表示する。カテゴリ定義は §6.2.1 に従う。 |
 
-API Activity は `/metrics/api-activity?days=30` の 14 種 count を Infinity datasource で取得し、Grafana transformation で 4 カテゴリ（`draft_activity` / `publish_activity` / `unpublish_activity` / `delete_activity`）に集約して stacked series として表示する。dashboard variable `api_activity_view` が詳細表示のときは `initial_draft_count` から `delete_closed_count` までの 14 系列を stacked bar で表示する。集約ルールは §6.2.1 に従う。
-Operation Category Breakdown は同じ `/metrics/api-activity?days=30` を再利用し、Grafana transformation で全 API を合算して 4 カテゴリの合計を求め、Pie chart の slice として表示する。`api_activity_view` の影響は受けず、常に 4 カテゴリ固定とする。
+API Activity は `/metrics/api-activity?from=${__timeFrom}&to=${__timeTo}` の 14 種 count を Infinity datasource で取得し、Grafana transformation で 4 カテゴリ（`draft_activity` / `publish_activity` / `unpublish_activity` / `delete_activity`）に集約して stacked series として表示する。dashboard variable `api_activity_view` が詳細表示のときは `initial_draft_count` から `delete_closed_count` までの 14 系列を stacked bar で表示する。集約ルールは §6.2.1 に従う。
+Operation Category Breakdown は同じ `/metrics/api-activity?from=${__timeFrom}&to=${__timeTo}` を再利用し、Grafana transformation で全 API を合算して 4 カテゴリの合計を求め、Pie chart の slice として表示する。`api_activity_view` の影響は受けず、常に 4 カテゴリ固定とする。
 Calendar Heatmap は `tim012432-calendarheatmap-panel` の Green カラースキームで日別件数を表示する。
-API Activity を最上部に全幅で配置し、その直下に Publish Action Trend を全幅で配置する。さらにその下に Weekly Publish Count と Weekly Published State Rate を横並びで配置する。Calendar Heatmap は最下部に全幅で配置する。
-Weekly Publish Count は `/metrics/publish-action-summary?days=7` の `publish_count`、Weekly Published State Rate は同 API（`days=7`）の `published_state_rate` を描画する。
+API Activity を最上部に全幅で配置し、その直下に Publish Action Trend を全幅で配置する。さらにその下に Publish Count と Published State Rate を横並びで配置する。Calendar Heatmap は最下部に全幅で配置する。
+Publish Count は `/metrics/publish-action-summary?from=${__timeFrom}&to=${__timeTo}` の `publish_count`、Published State Rate は同 API の `published_state_rate` を描画する。
 Publish Action Trend は `/metrics/publish-action-trend?from=${__timeFrom}&to=${__timeTo}` の `publish_from_draft_count`、`initial_publish_count`、`republish_from_closed_count` を stacked bar として描画する。
-Calendar Heatmap と Publish Action Trend では、ダッシュボードの time range（既定 `now-365d`）を Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` として API に渡す。
+すべてのパネルでは、ダッシュボードの time range（既定 `now-365d`）を Infinity datasource の backend-interpolated time macro `${__timeFrom}` / `${__timeTo}` として API に渡す。
 ダッシュボード timezone は `Asia/Tokyo` とし、ヒートマップの日付バケットを S3 パーティション `dt`（Webhook 受信日の JST 日付）と一致させる。
 Top Updated Contents は API response の `count` field を Table 上では `updated_count` として表示し、`last_event_at` は field override で `dateTimeAsLocal` 表示とする。
 Operation Category Breakdown は左列に配置し、その直下に Top Updated Contents を配置する。
-Average Time to Publish by API は dashboard variable `publish_duration_unit` により `days` / `hours` を切り替え、API には `unit=${publish_duration_unit}` を渡す。
+Average Time to Publish by API は dashboard variable `publish_duration_unit` により `days` / `hours` を切り替え、API には `from=${__timeFrom}` / `to=${__timeTo}` / `unit=${publish_duration_unit}` を渡す。
 初期値は `days` とする。
 `days` 表示では `avg_days` を描画し、green `< 1日`、yellow `< 3日`、red `>= 3日` の threshold を使う。
 `hours` 表示では `avg_hours` を描画し、green `< 24h`、yellow `< 72h`、red `>= 72h` の threshold を使う。
-Average Draft to Publish by API は Average Time to Publish by API と並置し、dashboard variable `publish_duration_unit` により `days` / `hours` を切り替え、API には `unit=${publish_duration_unit}` を渡す。`days` 表示では `avg_days`、`hours` 表示では `avg_hours` を描画する。API response の `sample_count` は平均算出件数の確認用であり、duration chart では描画しない。
+Average Draft to Publish by API は Average Time to Publish by API と並置し、dashboard variable `publish_duration_unit` により `days` / `hours` を切り替え、API には `from=${__timeFrom}` / `to=${__timeTo}` / `unit=${publish_duration_unit}` を渡す。`days` 表示では `avg_days`、`hours` 表示では `avg_hours` を描画する。API response の `sample_count` は平均算出件数の確認用であり、duration chart では描画しない。
 dashboard variable `api_activity_view` は API Activity パネルの表示列を切り替える。既定は 4 カテゴリ集約、詳細表示では 14 種の個別 series を表示する。
 
 Grafana Cloud provisioning は次の contract とする。

@@ -173,7 +173,7 @@ Grafana Cloud UI で確認する項目:
 
 - datasource `DuckDB Query API` の URL が `query_api_url` を指している
 - dashboard `microCMS Content Ops Analytics` が表示される
-- Calendar Heatmap, Weekly Publish Count, Weekly Published State Rate, API Activity, Publish Action Trend, Top Updated Contents, Average Time to Publish by API, Average Draft to Publish by API, Operation Category Breakdown の 9 パネルが plugin / datasource error にならない
+- Calendar Heatmap, Publish Count, Published State Rate, API Activity, Publish Action Trend, Top Updated Contents, Average Time to Publish by API, Average Draft to Publish by API, Operation Category Breakdown の 9 パネルが plugin / datasource error にならない
 
 ## 7. ドメイン設定について
 

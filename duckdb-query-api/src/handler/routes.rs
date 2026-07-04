@@ -5,9 +5,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{
-    AppState, validate_days, validate_limit, validate_publish_duration_unit, validate_time_range,
-};
+use super::{AppState, validate_limit, validate_publish_duration_unit, validate_time_range};
 use crate::ApiError;
 use crate::query::{
     ApiActivityRow, AverageDraftToPublishRow, AverageTimeToPublishRow, CalendarHeatmapRow,
@@ -18,13 +16,9 @@ use crate::query::{
 };
 
 #[derive(Debug, Deserialize)]
-struct DaysQuery {
-    days: Option<u32>,
-}
-
-#[derive(Debug, Deserialize)]
 struct AverageTimeToPublishQuery {
-    days: Option<u32>,
+    from: Option<i64>,
+    to: Option<i64>,
     unit: Option<String>,
 }
 
@@ -36,7 +30,8 @@ struct TimeRangeQuery {
 
 #[derive(Debug, Deserialize)]
 struct LimitedQuery {
-    days: Option<u32>,
+    from: Option<i64>,
+    to: Option<i64>,
     limit: Option<u32>,
 }
 
@@ -87,25 +82,27 @@ async fn calendar_heatmap(
 
 async fn api_activity(
     State(state): State<AppState>,
-    Query(query): Query<DaysQuery>,
+    Query(query): Query<TimeRangeQuery>,
 ) -> Result<Json<Vec<ApiActivityRow>>, ApiError> {
-    let days = validate_days(query.days)?;
+    let (from_ms, to_ms) = validate_time_range(query.from, query.to)?;
     state
         .duckdb
-        .query(move |connection, events_sql| query_api_activity_rows(connection, events_sql, days))
+        .query(move |connection, events_sql| {
+            query_api_activity_rows(connection, events_sql, from_ms, to_ms)
+        })
         .await
         .map(Json)
 }
 
 async fn publish_action_summary(
     State(state): State<AppState>,
-    Query(query): Query<DaysQuery>,
+    Query(query): Query<TimeRangeQuery>,
 ) -> Result<Json<Vec<PublishActionSummaryRow>>, ApiError> {
-    let days = validate_days(query.days)?;
+    let (from_ms, to_ms) = validate_time_range(query.from, query.to)?;
     state
         .duckdb
         .query(move |connection, events_sql| {
-            query_publish_action_summary_rows(connection, events_sql, days)
+            query_publish_action_summary_rows(connection, events_sql, from_ms, to_ms)
         })
         .await
         .map(Json)
@@ -129,12 +126,12 @@ async fn top_updated_contents(
     State(state): State<AppState>,
     Query(query): Query<LimitedQuery>,
 ) -> Result<Json<Vec<TopUpdatedContentRow>>, ApiError> {
-    let days = validate_days(query.days)?;
+    let (from_ms, to_ms) = validate_time_range(query.from, query.to)?;
     let limit = validate_limit(query.limit)?;
     state
         .duckdb
         .query(move |connection, events_sql| {
-            query_top_updated_contents_rows(connection, events_sql, days, limit)
+            query_top_updated_contents_rows(connection, events_sql, from_ms, to_ms, limit)
         })
         .await
         .map(Json)
@@ -144,12 +141,12 @@ async fn average_time_to_publish_by_api(
     State(state): State<AppState>,
     Query(query): Query<AverageTimeToPublishQuery>,
 ) -> Result<Json<Vec<AverageTimeToPublishRow>>, ApiError> {
-    let days = validate_days(query.days)?;
+    let (from_ms, to_ms) = validate_time_range(query.from, query.to)?;
     let unit = validate_publish_duration_unit(query.unit.as_deref())?;
     state
         .duckdb
         .query(move |connection, events_sql| {
-            query_average_time_to_publish_rows(connection, events_sql, days, unit)
+            query_average_time_to_publish_rows(connection, events_sql, from_ms, to_ms, unit)
         })
         .await
         .map(Json)
@@ -159,12 +156,12 @@ async fn average_draft_to_publish_by_api(
     State(state): State<AppState>,
     Query(query): Query<AverageTimeToPublishQuery>,
 ) -> Result<Json<Vec<AverageDraftToPublishRow>>, ApiError> {
-    let days = validate_days(query.days)?;
+    let (from_ms, to_ms) = validate_time_range(query.from, query.to)?;
     let unit = validate_publish_duration_unit(query.unit.as_deref())?;
     state
         .duckdb
         .query(move |connection, events_sql| {
-            query_average_draft_to_publish_rows(connection, events_sql, days, unit)
+            query_average_draft_to_publish_rows(connection, events_sql, from_ms, to_ms, unit)
         })
         .await
         .map(Json)

@@ -158,12 +158,12 @@ debug-parquet-delete:
 debug-metrics:
     curl http://localhost:8000/health
     curl "http://localhost:8000/metrics/calendar-heatmap"
-    curl "http://localhost:8000/metrics/publish-action-summary?days=7"
+    curl "http://localhost:8000/metrics/publish-action-summary"
     curl "http://localhost:8000/metrics/publish-action-trend"
-    curl "http://localhost:8000/metrics/api-activity?days=3660"
-    curl "http://localhost:8000/metrics/top-updated-contents?days=3660&limit=20"
-    curl "http://localhost:8000/metrics/average-time-to-publish-by-api?days=3660"
-    curl "http://localhost:8000/metrics/average-draft-to-publish-by-api?days=3660"
+    curl "http://localhost:8000/metrics/api-activity"
+    curl "http://localhost:8000/metrics/top-updated-contents?limit=20"
+    curl "http://localhost:8000/metrics/average-time-to-publish-by-api"
+    curl "http://localhost:8000/metrics/average-draft-to-publish-by-api"
 
 # List local Floci S3 event objects.
 debug-s3-ls:

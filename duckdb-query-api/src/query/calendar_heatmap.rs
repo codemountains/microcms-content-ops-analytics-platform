@@ -1,6 +1,6 @@
 use duckdb::Connection;
 
-use super::{CalendarHeatmapRow, JST_OFFSET_INTERVAL, PARTITION_TIME_JST_SUFFIX, collect_rows};
+use super::{CalendarHeatmapRow, PARTITION_TIME_JST_SUFFIX, collect_rows, time_range_bounds_cte};
 
 pub(crate) fn query_calendar_heatmap_rows(
     connection: &Connection,
@@ -8,13 +8,10 @@ pub(crate) fn query_calendar_heatmap_rows(
     from_ms: i64,
     to_ms: i64,
 ) -> duckdb::Result<Vec<CalendarHeatmapRow>> {
+    let bounds = time_range_bounds_cte(from_ms, to_ms);
     let sql = format!(
         r#"
-        WITH bounds AS (
-          SELECT
-            CAST(epoch_ms({from_ms}) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) AS start_date,
-            CAST(epoch_ms({to_ms}) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) AS end_date
-        ),
+        WITH {bounds},
         calendar AS (
           SELECT CAST(day AS DATE) AS dt
           FROM generate_series(

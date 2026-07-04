@@ -2,16 +2,17 @@ use duckdb::Connection;
 
 use super::event_kind;
 use super::{
-    JST_OFFSET_INTERVAL, PARTITION_TIME_JST_SUFFIX, PublishActionSummaryRow, PublishActionTrendRow,
-    collect_rows,
+    PARTITION_TIME_JST_SUFFIX, PublishActionSummaryRow, PublishActionTrendRow, collect_rows,
+    time_range_bounds_cte,
 };
 
 pub(crate) fn query_publish_action_summary_rows(
     connection: &Connection,
     events_sql: &str,
-    days: u32,
+    from_ms: i64,
+    to_ms: i64,
 ) -> duckdb::Result<Vec<PublishActionSummaryRow>> {
-    let days_minus_one = days - 1;
+    let bounds = time_range_bounds_cte(from_ms, to_ms);
     let initial_draft = event_kind::INITIAL_DRAFT;
     let save_draft = event_kind::SAVE_DRAFT;
     let publish_from_draft = event_kind::PUBLISH_FROM_DRAFT;
@@ -23,11 +24,7 @@ pub(crate) fn query_publish_action_summary_rows(
     let republish_from_closed = event_kind::REPUBLISH_FROM_CLOSED;
     let sql = format!(
         r#"
-        WITH bounds AS (
-          SELECT
-            CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY' AS start_date,
-            CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) AS end_date
-        ),
+        WITH {bounds},
         summary AS (
           SELECT
             COALESCE(SUM(CASE WHEN event_kind IN ('{publish_from_draft}', '{initial_publish}', '{republish_from_closed}') THEN 1 ELSE 0 END), 0) AS publish_count,
@@ -68,16 +65,13 @@ pub(crate) fn query_publish_action_trend_rows(
     from_ms: i64,
     to_ms: i64,
 ) -> duckdb::Result<Vec<PublishActionTrendRow>> {
+    let bounds = time_range_bounds_cte(from_ms, to_ms);
     let publish_from_draft = event_kind::PUBLISH_FROM_DRAFT;
     let initial_publish = event_kind::INITIAL_PUBLISH;
     let republish_from_closed = event_kind::REPUBLISH_FROM_CLOSED;
     let sql = format!(
         r#"
-        WITH bounds AS (
-          SELECT
-            CAST(epoch_ms({from_ms}) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) AS start_date,
-            CAST(epoch_ms({to_ms}) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) AS end_date
-        ),
+        WITH {bounds},
         calendar AS (
           SELECT CAST(day AS DATE) AS dt
           FROM generate_series(
@@ -131,46 +125,50 @@ mod tests {
     use super::*;
 
     #[test]
-    fn summarizes_publish_actions_and_published_state_rate_for_selected_days() {
+    fn summarizes_publish_actions_and_published_state_rate_for_selected_time_range() {
         let connection = Connection::open_in_memory().unwrap();
-        let current_jst_date =
-            "CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE)";
+        let from_ms = DateTime::parse_from_rfc3339("2026-06-30T00:00:00+09:00")
+            .unwrap()
+            .timestamp_millis();
+        let to_ms = DateTime::parse_from_rfc3339("2026-06-30T23:59:59+09:00")
+            .unwrap()
+            .timestamp_millis();
         let events_sql = r#"
             (
-              SELECT {current_jst_date} AS dt, 'PUBLISH_FROM_DRAFT' AS event_kind
+              SELECT DATE '2026-06-30' AS dt, 'PUBLISH_FROM_DRAFT' AS event_kind
               UNION ALL
-              SELECT {current_jst_date}, 'INITIAL_PUBLISH'
+              SELECT DATE '2026-06-30', 'INITIAL_PUBLISH'
               UNION ALL
-              SELECT {current_jst_date}, 'REPUBLISH_FROM_CLOSED'
+              SELECT DATE '2026-06-30', 'REPUBLISH_FROM_CLOSED'
               UNION ALL
-              SELECT {current_jst_date}, 'UPDATE_PUBLISHED'
+              SELECT DATE '2026-06-30', 'UPDATE_PUBLISHED'
               UNION ALL
-              SELECT {current_jst_date}, 'INITIAL_DRAFT'
+              SELECT DATE '2026-06-30', 'INITIAL_DRAFT'
               UNION ALL
-              SELECT {current_jst_date}, 'SAVE_DRAFT'
+              SELECT DATE '2026-06-30', 'SAVE_DRAFT'
               UNION ALL
-              SELECT {current_jst_date}, 'UNPUBLISH_TO_DRAFT'
+              SELECT DATE '2026-06-30', 'UNPUBLISH_TO_DRAFT'
               UNION ALL
-              SELECT {current_jst_date}, 'UNPUBLISH_TO_CLOSED'
+              SELECT DATE '2026-06-30', 'UNPUBLISH_TO_CLOSED'
               UNION ALL
-              SELECT {current_jst_date}, 'REOPEN_TO_DRAFT'
+              SELECT DATE '2026-06-30', 'REOPEN_TO_DRAFT'
               UNION ALL
-              SELECT {current_jst_date}, 'ADD_DRAFT_TO_PUBLISHED'
+              SELECT DATE '2026-06-30', 'ADD_DRAFT_TO_PUBLISHED'
               UNION ALL
-              SELECT {current_jst_date}, 'DISCARD_DRAFT_ON_PUBLISHED'
+              SELECT DATE '2026-06-30', 'DISCARD_DRAFT_ON_PUBLISHED'
               UNION ALL
-              SELECT {current_jst_date}, 'DELETE_PUBLISHED'
+              SELECT DATE '2026-06-30', 'DELETE_PUBLISHED'
               UNION ALL
-              SELECT {current_jst_date}, NULL
+              SELECT DATE '2026-06-30', NULL
               UNION ALL
-              SELECT {current_jst_date} - INTERVAL 1 DAY, 'PUBLISH_FROM_DRAFT'
+              SELECT DATE '2026-06-29', 'PUBLISH_FROM_DRAFT'
               UNION ALL
-              SELECT {current_jst_date} + INTERVAL 1 DAY, 'INITIAL_PUBLISH'
+              SELECT DATE '2026-07-01', 'INITIAL_PUBLISH'
             )
-        "#
-        .replace("{current_jst_date}", current_jst_date);
+        "#;
 
-        let rows = query_publish_action_summary_rows(&connection, &events_sql, 1).unwrap();
+        let rows =
+            query_publish_action_summary_rows(&connection, events_sql, from_ms, to_ms).unwrap();
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].publish_count, 3);
@@ -191,23 +189,30 @@ mod tests {
     #[test]
     fn returns_null_published_state_rate_when_no_state_arrivals_exist() {
         let connection = Connection::open_in_memory().unwrap();
+        let from_ms = DateTime::parse_from_rfc3339("2026-06-30T00:00:00+09:00")
+            .unwrap()
+            .timestamp_millis();
+        let to_ms = DateTime::parse_from_rfc3339("2026-06-30T23:59:59+09:00")
+            .unwrap()
+            .timestamp_millis();
         let events_sql = r#"
             (
               SELECT
-                CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE) AS dt,
+                DATE '2026-06-30' AS dt,
                 'ADD_DRAFT_TO_PUBLISHED' AS event_kind
               UNION ALL
               SELECT
-                CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE),
+                DATE '2026-06-30',
                 'DISCARD_DRAFT_ON_PUBLISHED'
               UNION ALL
               SELECT
-                CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE),
+                DATE '2026-06-30',
                 'DELETE_PUBLISHED'
             )
         "#;
 
-        let rows = query_publish_action_summary_rows(&connection, events_sql, 1).unwrap();
+        let rows =
+            query_publish_action_summary_rows(&connection, events_sql, from_ms, to_ms).unwrap();
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].publish_count, 0);
