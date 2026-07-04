@@ -146,6 +146,7 @@ s3://<bucket>/microcms_events/
 1. S3 上の Parquet を DuckDB の `read_parquet()` で読み込む
 2. 固定メトリクス API ごとに SQL を実行する
 3. Grafana が扱いやすい JSON を返す
+4. 任意有効化された MCP endpoint から同じ固定メトリクスを read-only tool として返す
 
 想定 API は次の通りです。
 
@@ -162,6 +163,7 @@ GET /metrics/average-draft-to-publish-by-api
 
 任意 SQL を受け付ける API は初期実装では提供しません。
 Grafana から実行できるクエリを固定することで、安全性と説明の分かりやすさを優先します。
+MCP endpoint でも任意 SQL tool は提供せず、既存の固定 metrics のみを公開します。
 
 ## Grafana
 
@@ -225,6 +227,9 @@ AWS 認証情報はローカルの credential chain を利用します。
 | `AWS_REGION` | no | `ap-northeast-1` | S3 bucket の region |
 | `DUCKDB_EXTENSION_DIRECTORY` | no | `/tmp/duckdb_extensions` | DuckDB extension の保存先 |
 | `PORT` | no | `8000` | HTTP server port |
+| `MCP_ENABLED` | no | `false` | `true` の場合だけ Streamable HTTP MCP endpoint `/mcp` を有効化 |
+| `MCP_BEARER_TOKEN` | MCP 有効時 yes | なし | `/mcp` で要求する bearer token |
+| `MCP_ALLOWED_ORIGINS` | MCP 有効時 yes | なし | `/mcp` で許可する `Origin`。comma-separated exact match |
 
 ### Grafana Cloud provisioning
 
@@ -315,7 +320,12 @@ docker compose up --build
 | `http://localhost:8000/metrics/top-updated-contents` | 更新回数が多いコンテンツ |
 | `http://localhost:8000/metrics/average-time-to-publish-by-api` | API ごとの平均公開所要日数 / 時間 |
 | `http://localhost:8000/metrics/average-draft-to-publish-by-api` | API ごとの下書き作成から公開までの平均所要日数 / 時間 |
+| `http://localhost:8000/mcp` | 任意有効化された MCP Streamable HTTP endpoint |
 | `http://localhost:3000` | Grafana |
+
+MCP endpoint はローカル/検証用途の opt-in 機能です。
+有効化する場合は `.env` で `MCP_ENABLED=true`、`MCP_BEARER_TOKEN`、`MCP_ALLOWED_ORIGINS` を設定してください。
+ECS / ALB で外部公開する運用は初期スコープ外であり、公開する場合は ALB 側認証やネットワーク境界を別途設計してください。
 
 ## OpenTofu / ローカルデバッグ
 

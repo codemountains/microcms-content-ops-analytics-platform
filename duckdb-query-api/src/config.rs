@@ -11,6 +11,15 @@ pub struct AppConfig {
     pub duckdb_s3_url_style: String,
     pub duckdb_s3_use_ssl: bool,
     pub port: u16,
+    pub mcp_enabled: bool,
+    pub mcp_bearer_token: Option<String>,
+    pub mcp_allowed_origins: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct McpConfig {
+    pub(crate) bearer_token: String,
+    pub(crate) allowed_origins: Vec<String>,
 }
 
 impl AppConfig {
@@ -30,6 +39,21 @@ impl AppConfig {
             .ok()
             .and_then(|value| value.parse().ok())
             .unwrap_or(8000);
+        let mcp_enabled = env::var("MCP_ENABLED")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(false);
+        let mcp_bearer_token = if mcp_enabled {
+            Some(required_env("MCP_BEARER_TOKEN")?)
+        } else {
+            optional_env("MCP_BEARER_TOKEN")
+        };
+        let mcp_allowed_origins = optional_env("MCP_ALLOWED_ORIGINS")
+            .map(|value| parse_csv(&value))
+            .unwrap_or_default();
+        if mcp_enabled && mcp_allowed_origins.is_empty() {
+            return Err(ApiError::MissingEnv("MCP_ALLOWED_ORIGINS"));
+        }
 
         Ok(Self {
             events_path,
@@ -39,7 +63,30 @@ impl AppConfig {
             duckdb_s3_url_style,
             duckdb_s3_use_ssl,
             port,
+            mcp_enabled,
+            mcp_bearer_token,
+            mcp_allowed_origins,
         })
+    }
+
+    pub(crate) fn mcp_config(&self) -> Result<Option<McpConfig>, ApiError> {
+        if !self.mcp_enabled {
+            return Ok(None);
+        }
+
+        let bearer_token = self
+            .mcp_bearer_token
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or(ApiError::MissingEnv("MCP_BEARER_TOKEN"))?;
+        if self.mcp_allowed_origins.is_empty() {
+            return Err(ApiError::MissingEnv("MCP_ALLOWED_ORIGINS"));
+        }
+
+        Ok(Some(McpConfig {
+            bearer_token,
+            allowed_origins: self.mcp_allowed_origins.clone(),
+        }))
     }
 }
 
@@ -57,4 +104,13 @@ fn optional_env(key: &'static str) -> Option<String> {
         .ok()
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())
+}
+
+fn parse_csv(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
 }

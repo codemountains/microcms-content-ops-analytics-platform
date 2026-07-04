@@ -208,6 +208,26 @@ Grafana:
 http://localhost:3000
 ```
 
+MCP endpoint をローカルで確認する場合は、`.env` で明示的に有効化します。
+
+```dotenv
+MCP_ENABLED=true
+MCP_BEARER_TOKEN=local-mcp-token
+MCP_ALLOWED_ORIGINS=http://localhost:8000
+```
+
+`duckdb-query-api` を再起動後、MCP client には Streamable HTTP endpoint として `http://localhost:8000/mcp` を設定します。
+HTTP で直接確認する場合は、`Authorization` と `Origin` header を付けて `initialize` を送信します。
+
+```bash
+curl -i http://localhost:8000/mcp \
+  --oauth2-bearer "$MCP_BEARER_TOKEN" \
+  -H 'Origin: http://localhost:8000' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"local-debug","version":"0.1.0"}}}'
+```
+
 ## 10. 停止と削除
 
 OpenTofu 管理リソースを削除します。
