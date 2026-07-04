@@ -13,7 +13,10 @@ use super::bulk::schedule::build_realistic_bulk_day_schedule;
 use super::bulk::timing::api_timing_profile;
 use super::bulk::{BULK_APIS, generate_bulk_activity_events};
 use super::rng::SeededRng;
-use super::smoke::{SMOKE_EVENT_IDS, smoke_fixtures};
+use super::smoke::{
+    SMOKE_BLOG_DIRECT_CONTENT_ULID, SMOKE_BLOG_LIFECYCLE_CONTENT_ULID, SMOKE_EVENT_IDS,
+    smoke_fixtures,
+};
 use super::time::{jst_date, jst_datetime, jst_today};
 use super::*;
 use crate::{NormalizedEvent, normalize_payload};
@@ -75,8 +78,19 @@ fn smoke_fixtures_align_content_ids_with_duckdb_integration_test() {
     assert_eq!(events[4].content_id, None);
     assert_eq!(events[5].content_id, None);
     assert_eq!(events[7].content_id, None);
-    assert_eq!(events[0].content_id.as_deref(), Some("content-1"));
-    assert_eq!(events[6].content_id.as_deref(), Some("content-2"));
+    assert_ulid(events[0].content_id.as_deref().unwrap());
+    assert_ulid(events[6].content_id.as_deref().unwrap());
+    assert_eq!(
+        events[0].content_id.as_deref(),
+        Some(SMOKE_BLOG_LIFECYCLE_CONTENT_ULID)
+    );
+    assert_eq!(
+        events[6].content_id.as_deref(),
+        Some(SMOKE_BLOG_DIRECT_CONTENT_ULID)
+    );
+    assert_eq!(events[0].content_id, events[1].content_id);
+    assert_eq!(events[1].content_id, events[2].content_id);
+    assert_ne!(events[0].content_id, events[6].content_id);
     assert_eq!(events[0].event_kind.as_deref(), Some("PUBLISH_FROM_DRAFT"));
     assert_eq!(events[3].event_kind.as_deref(), Some("UNPUBLISH_TO_DRAFT"));
     assert_eq!(events[4].event_kind.as_deref(), Some("UNPUBLISH_TO_CLOSED"));
@@ -239,7 +253,7 @@ fn regenerate_removes_stale_local_parquet_files() {
 }
 
 #[test]
-fn bulk_filler_does_not_emit_publish_lifecycle_event_kinds() {
+fn bulk_seed_uses_ulid_content_ids_without_losing_lifecycle_pairs() {
     let tempdir = tempdir().unwrap();
     generate_debug_parquet_files(&DebugSeedConfig {
         output_dir: tempdir.path().to_path_buf(),
@@ -252,7 +266,9 @@ fn bulk_filler_does_not_emit_publish_lifecycle_event_kinds() {
     })
     .unwrap();
 
-    let mut filler_lifecycle_kinds = 0usize;
+    let mut draft_content_ids = BTreeMap::new();
+    let mut publish_from_draft_content_ids = Vec::new();
+    let mut distinct_content_ids = BTreeMap::new();
     for path in walk_parquet_files(tempdir.path()) {
         let bytes = fs::read(&path).unwrap();
         let builder = ParquetRecordBatchReaderBuilder::try_new(Bytes::from(bytes)).unwrap();
@@ -273,20 +289,32 @@ fn bulk_filler_does_not_emit_publish_lifecycle_event_kinds() {
                 .unwrap();
             for row in 0..batch.num_rows() {
                 let content_id = content_ids.value(row);
-                if content_id.starts_with("metric-") || content_id.starts_with("activity-draft-") {
-                    continue;
-                }
+                assert_ulid(content_id);
+                distinct_content_ids.insert(content_id.to_owned(), ());
                 let kind = event_kinds.value(row);
-                if matches!(kind, "INITIAL_DRAFT" | "PUBLISH_FROM_DRAFT") {
-                    filler_lifecycle_kinds += 1;
+                if kind == "INITIAL_DRAFT" {
+                    draft_content_ids.insert(content_id.to_owned(), ());
+                } else if kind == "PUBLISH_FROM_DRAFT" {
+                    publish_from_draft_content_ids.push(content_id.to_owned());
                 }
             }
         }
     }
 
+    let targets = compute_activity_targets(2_000, 90);
     assert_eq!(
-        filler_lifecycle_kinds, 0,
-        "filler must not emit publish lifecycle events that skew Grafana metrics"
+        publish_from_draft_content_ids.len(),
+        targets.publish_from_draft as usize
+    );
+    for content_id in publish_from_draft_content_ids {
+        assert!(
+            draft_content_ids.contains_key(&content_id),
+            "PUBLISH_FROM_DRAFT must share a ULID with its INITIAL_DRAFT: {content_id}"
+        );
+    }
+    assert!(
+        distinct_content_ids.len() < 2_000,
+        "bulk seed should keep repeated content_id distribution for top contents"
     );
 }
 
@@ -334,29 +362,22 @@ fn bulk_seed_generates_both_unpublish_variants() {
 #[test]
 fn metric_lifecycle_draft_to_publish_days_stay_within_api_ranges() {
     let events = generate_test_bulk_events(50_000);
-    let targets = compute_activity_targets(50_000, 90);
 
     for api in BULK_APIS {
         let mut durations = Vec::new();
-        for pair_index in 0..targets.publish_from_draft {
-            if BULK_APIS[pair_index as usize % BULK_APIS.len()] != *api {
-                continue;
-            }
-            let content_id = format!("metric-{api}-{pair_index}");
+        for publish in events.iter().filter(|event| {
+            event.api.as_deref() == Some(*api)
+                && event.event_kind.as_deref() == Some("PUBLISH_FROM_DRAFT")
+        }) {
+            let content_id = publish.content_id.as_deref().expect("publish content_id");
+            assert_ulid(content_id);
             let draft = events
                 .iter()
                 .find(|event| {
-                    event.content_id.as_deref() == Some(content_id.as_str())
+                    event.content_id.as_deref() == Some(content_id)
                         && event.event_kind.as_deref() == Some("INITIAL_DRAFT")
                 })
                 .expect("draft event");
-            let publish = events
-                .iter()
-                .find(|event| {
-                    event.content_id.as_deref() == Some(content_id.as_str())
-                        && event.event_kind.as_deref() == Some("PUBLISH_FROM_DRAFT")
-                })
-                .expect("publish event");
             durations.push(
                 (publish.content_published_at.unwrap() - draft.draft_created_at.unwrap())
                     .num_days(),
@@ -563,7 +584,7 @@ fn publish_lead_days_for_api(events: &[NormalizedEvent], api: &str) -> i64 {
 }
 
 fn draft_to_publish_days_for_api(events: &[NormalizedEvent], api: &str) -> i64 {
-    let content_id = first_metric_pair_content_id(events, api);
+    let content_id = first_publish_from_draft_content_id(events, api);
     let draft = events
         .iter()
         .find(|event| {
@@ -581,23 +602,25 @@ fn draft_to_publish_days_for_api(events: &[NormalizedEvent], api: &str) -> i64 {
     (publish.content_published_at.unwrap() - draft.draft_created_at.unwrap()).num_days()
 }
 
-fn first_metric_pair_content_id(events: &[NormalizedEvent], api: &str) -> String {
+fn first_publish_from_draft_content_id(events: &[NormalizedEvent], api: &str) -> String {
     events
         .iter()
         .find(|event| {
             event.api.as_deref() == Some(api)
                 && event.event_kind.as_deref() == Some("PUBLISH_FROM_DRAFT")
-                && event
-                    .content_id
-                    .as_deref()
-                    .is_some_and(|content_id| content_id.starts_with("metric-"))
-                && event
-                    .content_id
-                    .as_deref()
-                    .is_some_and(|content_id| !content_id.contains("-direct-"))
         })
         .and_then(|event| event.content_id.clone())
-        .unwrap_or_else(|| panic!("metric pair for api={api}"))
+        .unwrap_or_else(|| panic!("publish-from-draft pair for api={api}"))
+}
+
+fn assert_ulid(value: &str) {
+    assert_eq!(value.len(), 26, "ULID must be 26 chars: {value}");
+    assert!(
+        value
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'A'..=b'H' | b'J'..=b'K' | b'M'..=b'N' | b'P'..=b'T' | b'V'..=b'Z')),
+        "ULID contains invalid Crockford Base32 chars: {value}"
+    );
 }
 
 fn count_unique_partition_dates(root: &Path) -> usize {

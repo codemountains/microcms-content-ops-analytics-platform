@@ -5,6 +5,7 @@ mod io;
 mod rng;
 mod smoke;
 mod time;
+mod ulid;
 
 use crate::IngestError;
 

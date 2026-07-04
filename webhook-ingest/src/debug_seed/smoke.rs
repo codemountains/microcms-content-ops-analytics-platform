@@ -20,6 +20,8 @@ pub(super) const SMOKE_EVENT_IDS: [&str; 8] = [
     "018f1001-0000-7000-8000-000000000007",
     "018f1001-0000-7000-8000-000000000008",
 ];
+pub(super) const SMOKE_BLOG_LIFECYCLE_CONTENT_ULID: &str = "01J1DVG0000000000000000001";
+pub(super) const SMOKE_BLOG_DIRECT_CONTENT_ULID: &str = "01J1DVG0000000000000000002";
 
 pub(super) fn generate_smoke_files(
     config: &DebugSeedConfig,
@@ -77,7 +79,7 @@ pub(super) fn smoke_fixtures(
         .map(|case| {
             smoke_fixture(
                 case.api,
-                case.content_id,
+                case.content_id.map(SmokeContentId::as_ulid),
                 case.event_type,
                 case.old_status,
                 case.new_status,
@@ -95,7 +97,7 @@ pub(super) fn smoke_fixtures(
 #[derive(Debug, Clone, Copy)]
 struct SmokeFixtureCase {
     api: &'static str,
-    content_id: Option<&'static str>,
+    content_id: Option<SmokeContentId>,
     event_type: &'static str,
     old_status: Option<&'static str>,
     new_status: Option<&'static str>,
@@ -105,6 +107,21 @@ struct SmokeFixtureCase {
     draft_created_at: Option<SmokeDateTime>,
     content_created_at: Option<SmokeDateTime>,
     content_published_at: Option<SmokeDateTime>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SmokeContentId {
+    BlogLifecycle,
+    BlogDirect,
+}
+
+impl SmokeContentId {
+    const fn as_ulid(self) -> &'static str {
+        match self {
+            SmokeContentId::BlogLifecycle => SMOKE_BLOG_LIFECYCLE_CONTENT_ULID,
+            SmokeContentId::BlogDirect => SMOKE_BLOG_DIRECT_CONTENT_ULID,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -157,7 +174,7 @@ const fn at(date: SmokeDate, hour: u32, minute: u32) -> SmokeDateTime {
 const SMOKE_FIXTURE_CASES: &[SmokeFixtureCase] = &[
     SmokeFixtureCase {
         api: "blogs",
-        content_id: Some("content-1"),
+        content_id: Some(SmokeContentId::BlogLifecycle),
         event_type: "edit",
         old_status: Some("DRAFT"),
         new_status: Some("PUBLISH"),
@@ -170,7 +187,7 @@ const SMOKE_FIXTURE_CASES: &[SmokeFixtureCase] = &[
     },
     SmokeFixtureCase {
         api: "blogs",
-        content_id: Some("content-1"),
+        content_id: Some(SmokeContentId::BlogLifecycle),
         event_type: "new",
         old_status: None,
         new_status: Some("DRAFT"),
@@ -183,7 +200,7 @@ const SMOKE_FIXTURE_CASES: &[SmokeFixtureCase] = &[
     },
     SmokeFixtureCase {
         api: "blogs",
-        content_id: Some("content-1"),
+        content_id: Some(SmokeContentId::BlogLifecycle),
         event_type: "edit",
         old_status: Some("PUBLISH"),
         new_status: Some("PUBLISH"),
@@ -235,7 +252,7 @@ const SMOKE_FIXTURE_CASES: &[SmokeFixtureCase] = &[
     },
     SmokeFixtureCase {
         api: "blogs",
-        content_id: Some("content-2"),
+        content_id: Some(SmokeContentId::BlogDirect),
         event_type: "new",
         old_status: None,
         new_status: Some("PUBLISH"),

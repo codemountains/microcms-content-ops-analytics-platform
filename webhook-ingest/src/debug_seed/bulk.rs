@@ -19,6 +19,7 @@ use super::config::{DebugSeedConfig, DebugSeedSummary};
 use super::io::{partition_dir_for_event, track_date, write_multi_event_file};
 use super::rng::SeededRng;
 use super::time::{jst_date, jst_datetime, jst_today};
+use super::ulid::deterministic_content_ulid;
 
 pub(super) const BULK_APIS: &[&str] = &[
     "blogs",
@@ -101,12 +102,18 @@ pub(super) fn generate_bulk_activity_events(
 
     for pair_index in 0..targets.publish_from_draft {
         let api = BULK_APIS[pair_index as usize % BULK_APIS.len()];
-        let content_id = format!("metric-{api}-{pair_index}");
         let publish_lead_days = api_publish_lead_days(api, pair_index);
         let draft_to_publish_days = api_draft_to_publish_days(api, pair_index);
         let publish_at = random_received_at_on_schedule(rng, schedule);
         let content_created_at = publish_at - Duration::days(publish_lead_days);
         let draft_created_at = publish_at - Duration::days(draft_to_publish_days);
+        let content_id = deterministic_content_ulid(
+            content_created_at,
+            config.seed,
+            "bulk-metric-pair",
+            api,
+            pair_index,
+        );
         let publish_day = jst_date(publish_at);
         let eligible_draft_days: Vec<NaiveDate> = schedule
             .days
@@ -159,9 +166,15 @@ pub(super) fn generate_bulk_activity_events(
 
     for orphan_index in 0..orphan_drafts {
         let api = BULK_APIS[orphan_index as usize % BULK_APIS.len()];
-        let content_id = format!("activity-draft-{orphan_index}");
         let received_at = random_received_at_on_schedule(rng, schedule);
         let draft_created_at = received_at - Duration::days(i64::from(orphan_index % 7 + 1));
+        let content_id = deterministic_content_ulid(
+            draft_created_at,
+            config.seed,
+            "bulk-orphan-draft",
+            api,
+            orphan_index,
+        );
         push_bulk_event(
             events,
             min_dt,
@@ -180,9 +193,15 @@ pub(super) fn generate_bulk_activity_events(
 
     for draft_index in 0..targets.save_draft {
         let api = BULK_APIS[draft_index as usize % BULK_APIS.len()];
-        let content_id = format!("activity-save-draft-{draft_index}");
         let received_at = random_received_at_on_schedule(rng, schedule);
         let draft_created_at = received_at - Duration::days(i64::from(draft_index % 10 + 1));
+        let content_id = deterministic_content_ulid(
+            draft_created_at,
+            config.seed,
+            "bulk-save-draft",
+            api,
+            draft_index,
+        );
         push_bulk_event(
             events,
             min_dt,
@@ -201,11 +220,17 @@ pub(super) fn generate_bulk_activity_events(
 
     for publish_index in 0..targets.initial_publish {
         let api = BULK_APIS[publish_index as usize % BULK_APIS.len()];
-        let content_id = format!("metric-{api}-direct-{publish_index}");
         let publish_lead_days =
             api_publish_lead_days(api, publish_index) + i64::from(publish_index % 4);
         let publish_at = random_received_at_on_schedule(rng, schedule);
         let content_created_at = publish_at - Duration::days(publish_lead_days);
+        let content_id = deterministic_content_ulid(
+            content_created_at,
+            config.seed,
+            "bulk-direct-publish",
+            api,
+            publish_index,
+        );
         push_bulk_event(
             events,
             min_dt,
@@ -256,7 +281,7 @@ pub(super) fn generate_bulk_activity_events(
     for template in filler_templates {
         let received_at = random_received_at_on_schedule(rng, schedule);
         let api = BULK_APIS[rng.next_usize(BULK_APIS.len())];
-        let content_id = pick_content_id(rng, config.contents);
+        let content_id = pick_content_id(rng, config, api);
         push_bulk_event(
             events,
             min_dt,
@@ -297,9 +322,20 @@ fn push_bulk_event(
     Ok(())
 }
 
-fn pick_content_id(rng: &mut SeededRng, contents: u32) -> String {
+fn pick_content_id(rng: &mut SeededRng, config: &DebugSeedConfig, api: &str) -> String {
     let raw = rng.next_u64() as f64 / u64::MAX as f64;
     let biased = raw * raw;
-    let index = (biased * f64::from(contents - 1)).round() as u32;
-    format!("content-{index}")
+    let index = (biased * f64::from(config.contents - 1)).round() as u32;
+    deterministic_content_ulid(
+        bulk_pool_content_timestamp(index),
+        config.seed,
+        "bulk-content-pool",
+        api,
+        index,
+    )
+}
+
+fn bulk_pool_content_timestamp(index: u32) -> DateTime<Utc> {
+    DateTime::from_timestamp(1_767_225_600 + i64::from(index) * 60, 0)
+        .expect("valid bulk pool content timestamp")
 }
