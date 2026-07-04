@@ -275,21 +275,23 @@ mod tests {
             .query(move |connection, events_sql| {
                 Ok((
                     query_calendar_heatmap_rows(connection, events_sql, from_ms, to_ms)?,
-                    query_api_activity_rows(connection, events_sql, 4)?,
-                    query_top_updated_contents_rows(connection, events_sql, 4, 20)?,
+                    query_api_activity_rows(connection, events_sql, from_ms, to_ms)?,
+                    query_top_updated_contents_rows(connection, events_sql, from_ms, to_ms, 20)?,
                     query_average_time_to_publish_rows(
                         connection,
                         events_sql,
-                        4,
+                        from_ms,
+                        to_ms,
                         PublishDurationUnit::Days,
                     )?,
                     query_average_draft_to_publish_rows(
                         connection,
                         events_sql,
-                        4,
+                        from_ms,
+                        to_ms,
                         PublishDurationUnit::Days,
                     )?,
-                    query_publish_action_summary_rows(connection, events_sql, 4)?,
+                    query_publish_action_summary_rows(connection, events_sql, from_ms, to_ms)?,
                     query_publish_action_trend_rows(connection, events_sql, from_ms, to_ms)?,
                 ))
             })

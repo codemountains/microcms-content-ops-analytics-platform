@@ -1,22 +1,24 @@
 use duckdb::Connection;
 
 use super::event_kind;
-use super::{AverageDraftToPublishRow, JST_OFFSET_INTERVAL, collect_rows};
+use super::{AverageDraftToPublishRow, collect_rows, time_range_bounds_cte};
 use crate::handler::PublishDurationUnit;
 
 pub(crate) fn query_average_draft_to_publish_rows(
     connection: &Connection,
     events_sql: &str,
-    days: u32,
+    from_ms: i64,
+    to_ms: i64,
     unit: PublishDurationUnit,
 ) -> duckdb::Result<Vec<AverageDraftToPublishRow>> {
-    let days_minus_one = days - 1;
+    let bounds = time_range_bounds_cte(from_ms, to_ms);
     let (divisor, value_column) = unit.sql_parts();
     let initial_draft = event_kind::INITIAL_DRAFT;
     let publish_from_draft = event_kind::PUBLISH_FROM_DRAFT;
     let sql = format!(
         r#"
-        WITH drafts AS (
+        WITH {bounds},
+        drafts AS (
           SELECT
             api,
             content_id,
@@ -35,7 +37,8 @@ pub(crate) fn query_average_draft_to_publish_rows(
             MIN(content_published_at) AS published_at
           FROM {events_sql}
           WHERE
-            dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY'
+            dt >= (SELECT start_date FROM bounds)
+            AND dt <= (SELECT end_date FROM bounds)
             AND event_kind = '{publish_from_draft}'
             AND content_id IS NOT NULL
             AND content_published_at IS NOT NULL
@@ -70,6 +73,7 @@ pub(crate) fn query_average_draft_to_publish_rows(
 
 #[cfg(test)]
 mod tests {
+    use chrono::DateTime;
     use duckdb::Connection;
 
     use super::*;
@@ -77,64 +81,69 @@ mod tests {
     #[test]
     fn queries_average_draft_to_publish_by_api_from_first_publish_period() {
         let connection = Connection::open_in_memory().unwrap();
-        let current_jst_date =
-            "CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '9 HOURS' AS DATE)";
+        let from_ms = DateTime::parse_from_rfc3339("2026-06-30T00:00:00+09:00")
+            .unwrap()
+            .timestamp_millis();
+        let to_ms = DateTime::parse_from_rfc3339("2026-06-30T23:59:59+09:00")
+            .unwrap()
+            .timestamp_millis();
         let events_sql = r#"
             (
-              SELECT {current_jst_date} AS dt, 'blogs' AS api, 'content-1' AS content_id,
+              SELECT DATE '2026-06-30' AS dt, 'blogs' AS api, 'content-1' AS content_id,
                      'INITIAL_DRAFT' AS event_kind, TIMESTAMP '2026-06-24 00:00:00' AS draft_created_at,
                      NULL::TIMESTAMP AS content_published_at
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'content-1',
+              SELECT DATE '2026-06-30', 'blogs', 'content-1',
                      'PUBLISH_FROM_DRAFT', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'content-2',
+              SELECT DATE '2026-06-30', 'blogs', 'content-2',
                      'INITIAL_DRAFT', TIMESTAMP '2026-06-27 00:00:00', NULL::TIMESTAMP
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'content-2',
+              SELECT DATE '2026-06-30', 'blogs', 'content-2',
                      'PUBLISH_FROM_DRAFT', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'draft-only',
+              SELECT DATE '2026-06-30', 'blogs', 'draft-only',
                      'INITIAL_DRAFT', TIMESTAMP '2026-06-26 00:00:00', NULL::TIMESTAMP
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'saved-draft-only',
+              SELECT DATE '2026-06-30', 'blogs', 'saved-draft-only',
                      'SAVE_DRAFT', TIMESTAMP '2026-06-26 00:00:00', NULL::TIMESTAMP
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'instant-publish',
+              SELECT DATE '2026-06-30', 'blogs', 'instant-publish',
                      'INITIAL_PUBLISH', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
               UNION ALL
-              SELECT {current_jst_date} - INTERVAL '40 DAY',
+              SELECT DATE '2026-06-29',
                      'blogs', 'outside-period', 'PUBLISH_FROM_DRAFT', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'outside-period',
+              SELECT DATE '2026-06-30', 'blogs', 'outside-period',
                      'INITIAL_DRAFT', TIMESTAMP '2026-06-27 00:00:00', NULL::TIMESTAMP
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'negative-lead',
+              SELECT DATE '2026-06-30', 'blogs', 'negative-lead',
                      'INITIAL_DRAFT', TIMESTAMP '2026-06-30 00:00:00', NULL::TIMESTAMP
               UNION ALL
-              SELECT {current_jst_date}, 'blogs', 'negative-lead',
+              SELECT DATE '2026-06-30', 'blogs', 'negative-lead',
                      'PUBLISH_FROM_DRAFT', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
               UNION ALL
-              SELECT {current_jst_date}, 'authors', 'author-1',
+              SELECT DATE '2026-06-30', 'authors', 'author-1',
                      'INITIAL_DRAFT', TIMESTAMP '2026-06-28 00:00:00', NULL::TIMESTAMP
               UNION ALL
-              SELECT {current_jst_date}, 'authors', 'author-1',
+              SELECT DATE '2026-06-30', 'authors', 'author-1',
                      'PUBLISH_FROM_DRAFT', NULL::TIMESTAMP, TIMESTAMP '2026-06-29 00:00:00'
             )
-        "#
-        .replace("{current_jst_date}", current_jst_date);
+        "#;
 
         let day_rows = query_average_draft_to_publish_rows(
             &connection,
-            &events_sql,
-            30,
+            events_sql,
+            from_ms,
+            to_ms,
             PublishDurationUnit::Days,
         )
         .unwrap();
         let hour_rows = query_average_draft_to_publish_rows(
             &connection,
-            &events_sql,
-            30,
+            events_sql,
+            from_ms,
+            to_ms,
             PublishDurationUnit::Hours,
         )
         .unwrap();

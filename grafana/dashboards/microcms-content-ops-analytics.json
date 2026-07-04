@@ -148,8 +148,12 @@
             "method": "GET",
             "params": [
               {
-                "key": "days",
-                "value": "7"
+                "key": "from",
+                "value": "${__timeFrom}"
+              },
+              {
+                "key": "to",
+                "value": "${__timeTo}"
               }
             ],
             "data": ""
@@ -166,8 +170,8 @@
           "global_query_id": ""
         }
       ],
-      "title": "Weekly Publish Count",
-      "description": "直近1週間（7日）の PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED の合計数を表示します。日付境界は JST の dt partition に揃えます。",
+      "title": "Publish Count",
+      "description": "ダッシュボードの time range 内にある PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED の合計数を表示します。日付境界は JST の dt partition に揃えます。",
       "type": "stat"
     },
     {
@@ -241,8 +245,12 @@
             "method": "GET",
             "params": [
               {
-                "key": "days",
-                "value": "7"
+                "key": "from",
+                "value": "${__timeFrom}"
+              },
+              {
+                "key": "to",
+                "value": "${__timeTo}"
               }
             ],
             "data": ""
@@ -259,8 +267,8 @@
           "global_query_id": ""
         }
       ],
-      "title": "Weekly Published State Rate",
-      "description": "直近1週間（7日）の状態到達・維持イベントのうち公開状態に到達・維持した割合を表示します。ADD_DRAFT_TO_PUBLISHED / DISCARD_DRAFT_ON_PUBLISHED / DELETE_* は除外し、分母が 0 件の場合は null です。",
+      "title": "Published State Rate",
+      "description": "ダッシュボードの time range 内にある状態到達・維持イベントのうち公開状態に到達・維持した割合を表示します。ADD_DRAFT_TO_PUBLISHED / DISCARD_DRAFT_ON_PUBLISHED / DELETE_* は除外し、分母が 0 件の場合は null です。",
       "type": "gauge"
     },
     {
@@ -799,8 +807,12 @@
             "method": "GET",
             "params": [
               {
-                "key": "days",
-                "value": "30"
+                "key": "from",
+                "value": "${__timeFrom}"
+              },
+              {
+                "key": "to",
+                "value": "${__timeTo}"
               }
             ],
             "data": ""
@@ -888,7 +900,7 @@
         }
       ],
       "title": "API Activity",
-      "description": "API ごとの event_kind 件数（直近 30 日）。既定は下書き操作 / 公開・更新 / 非公開・再開 / 削除の 4 カテゴリ集約を horizontal stacked bar で表示します。上部の api_activity_view で 14 種の詳細内訳に切り替えられます。",
+      "description": "API ごとの event_kind 件数。ダッシュボードの time range で絞り込み、既定は下書き操作 / 公開・更新 / 非公開・再開 / 削除の 4 カテゴリ集約を horizontal stacked bar で表示します。上部の api_activity_view で 14 種の詳細内訳に切り替えられます。",
       "transformations": [
         {
           "id": "organize",
@@ -1038,8 +1050,12 @@
             "method": "GET",
             "params": [
               {
-                "key": "days",
-                "value": "30"
+                "key": "from",
+                "value": "${__timeFrom}"
+              },
+              {
+                "key": "to",
+                "value": "${__timeTo}"
               },
               {
                 "key": "limit",
@@ -1076,7 +1092,7 @@
         }
       ],
       "title": "Top Updated Contents",
-      "description": "event_type が new または edit で content_id があるイベントを対象に、更新回数が多いコンテンツ上位 20 件（直近 30 日）を表示します。updated_count は API の count、last_event_at は最終イベント時刻です。",
+      "description": "event_type が new または edit で content_id があるイベントを対象に、ダッシュボードの time range 内で更新回数が多いコンテンツ上位 20 件を表示します。updated_count は API の count、last_event_at は最終イベント時刻です。",
       "transformations": [
         {
           "id": "organize",
@@ -1203,8 +1219,12 @@
             "method": "GET",
             "params": [
               {
-                "key": "days",
-                "value": "30"
+                "key": "from",
+                "value": "${__timeFrom}"
+              },
+              {
+                "key": "to",
+                "value": "${__timeTo}"
               },
               {
                 "key": "unit",
@@ -1236,7 +1256,7 @@
         }
       ],
       "title": "Average Time to Publish by API",
-      "description": "API ごとに、コンテンツ作成（publishValue.createdAt）から公開到達（publishValue.publishedAt）までの平均所要時間を表示します。PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED を対象（直近 30 日）にし、publish_duration_unit で日数 / 時間を切り替えます。",
+      "description": "API ごとに、コンテンツ作成（publishValue.createdAt）から公開到達（publishValue.publishedAt）までの平均所要時間を表示します。PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED を対象にダッシュボードの time range で絞り込み、publish_duration_unit で日数 / 時間を切り替えます。",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -1360,8 +1380,12 @@
             "method": "GET",
             "params": [
               {
-                "key": "days",
-                "value": "30"
+                "key": "from",
+                "value": "${__timeFrom}"
+              },
+              {
+                "key": "to",
+                "value": "${__timeTo}"
               },
               {
                 "key": "unit",
@@ -1393,7 +1417,7 @@
         }
       ],
       "title": "Average Draft to Publish by API",
-      "description": "API ごとに、下書き作成（draftValue.createdAt）から下書き経由公開（publishValue.publishedAt）までの平均所要時間を表示します。同一 api / content_id の INITIAL_DRAFT と PUBLISH_FROM_DRAFT を結合します。期間フィルタは PUBLISH_FROM_DRAFT 側の dt に適用します（直近 30 日）。",
+      "description": "API ごとに、下書き作成（draftValue.createdAt）から下書き経由公開（publishValue.publishedAt）までの平均所要時間を表示します。同一 api / content_id の INITIAL_DRAFT と PUBLISH_FROM_DRAFT を結合します。期間フィルタは PUBLISH_FROM_DRAFT 側の dt に適用し、ダッシュボードの time range で絞り込みます。",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -1546,8 +1570,12 @@
             "method": "GET",
             "params": [
               {
-                "key": "days",
-                "value": "30"
+                "key": "from",
+                "value": "${__timeFrom}"
+              },
+              {
+                "key": "to",
+                "value": "${__timeTo}"
               }
             ],
             "data": ""
@@ -1635,7 +1663,7 @@
         }
       ],
       "title": "Operation Category Breakdown",
-      "description": "直近 30 日の全 API を合算し、event_kind を 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）に集約した操作構成比を円グラフで表示します。カテゴリ定義は API Activity と共通です。",
+      "description": "ダッシュボードの time range 内の全 API を合算し、event_kind を 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）に集約した操作構成比を円グラフで表示します。カテゴリ定義は API Activity と共通です。",
       "transformations": [
         {
           "id": "organize",

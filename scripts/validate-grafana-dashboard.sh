@@ -115,27 +115,33 @@ run_jq "Calendar Heatmap panel wiring" -e '
 run_jq "primary panels are laid out in dashboard order" -e '
   (.panels[] | select(.title == "API Activity") | .type == "barchart" and .gridPos == {"h":12,"w":24,"x":0,"y":0})
     and (.panels[] | select(.title == "Publish Action Trend") | .type == "timeseries" and .gridPos == {"h":8,"w":24,"x":0,"y":12})
-    and (.panels[] | select(.title == "Weekly Publish Count") | .type == "stat" and .gridPos == {"h":5,"w":12,"x":0,"y":20})
-    and (.panels[] | select(.title == "Weekly Published State Rate") | .type == "gauge" and .gridPos == {"h":5,"w":12,"x":12,"y":20})
+    and (.panels[] | select(.title == "Publish Count") | .type == "stat" and .gridPos == {"h":5,"w":12,"x":0,"y":20})
+    and (.panels[] | select(.title == "Published State Rate") | .type == "gauge" and .gridPos == {"h":5,"w":12,"x":12,"y":20})
 '
 
-run_jq "Weekly Publish Count panel wiring" -e '
+run_jq "Publish Count panel wiring" -e '
   .panels[]
-  | select(.title == "Weekly Publish Count")
+  | select(.title == "Publish Count")
   | .targets[]
   | select(.url == "/metrics/publish-action-summary")
-  | select((.url_options.params // []) == [{"key":"days","value":"7"}])
+  | select((.url_options.params // []) == [
+      {"key":"from","value":"${__timeFrom}"},
+      {"key":"to","value":"${__timeTo}"}
+    ])
   | .columns[]
   | select(.selector == "publish_count" and .text == "publish_count" and .type == "number")
 '
 
-run_jq "Weekly Published State Rate panel wiring" -e '
+run_jq "Published State Rate panel wiring" -e '
   .panels[]
-  | select(.title == "Weekly Published State Rate")
+  | select(.title == "Published State Rate")
   | select(.fieldConfig.defaults.unit == "percentunit")
   | .targets[]
   | select(.url == "/metrics/publish-action-summary")
-  | select((.url_options.params // []) == [{"key":"days","value":"7"}])
+  | select((.url_options.params // []) == [
+      {"key":"from","value":"${__timeFrom}"},
+      {"key":"to","value":"${__timeTo}"}
+    ])
   | .columns[]
   | select(.selector == "published_state_rate" and .text == "published_state_rate" and .type == "number")
 '
@@ -168,7 +174,10 @@ run_jq "API Activity field mappings" -e '
   | select(.title == "API Activity")
   | .targets[]
   | select(.url == "/metrics/api-activity")
-  | select((.url_options.params // []) == [{"key":"days","value":"30"}])
+  | select((.url_options.params // []) == [
+      {"key":"from","value":"${__timeFrom}"},
+      {"key":"to","value":"${__timeTo}"}
+    ])
   | [.columns[] | {selector, text, type}] as $fields
   | all(
       [
@@ -284,7 +293,10 @@ run_jq "Operation Category Breakdown panel wiring" -e '
   | select(.gridPos == {"h":9,"w":12,"x":0,"y":25})
   | .targets[]
   | select(.url == "/metrics/api-activity")
-  | select((.url_options.params // []) == [{"key":"days","value":"30"}])
+  | select((.url_options.params // []) == [
+      {"key":"from","value":"${__timeFrom}"},
+      {"key":"to","value":"${__timeTo}"}
+    ])
 '
 
 run_jq "Top Updated Contents panel position" -e '
@@ -327,7 +339,8 @@ run_jq "Top Updated Contents count field mapping" -e '
   | .targets[]
   | select(.url == "/metrics/top-updated-contents")
   | select((.url_options.params // []) == [
-      {"key":"days","value":"30"},
+      {"key":"from","value":"${__timeFrom}"},
+      {"key":"to","value":"${__timeTo}"},
       {"key":"limit","value":"20"}
     ])
   | .columns[]
@@ -373,7 +386,8 @@ run_jq "Average Time to Publish by API panel wiring" -e '
   | .targets[]
   | select(.url == "/metrics/average-time-to-publish-by-api")
   | select((.url_options.params // []) == [
-      {"key":"days","value":"30"},
+      {"key":"from","value":"${__timeFrom}"},
+      {"key":"to","value":"${__timeTo}"},
       {"key":"unit","value":"${publish_duration_unit}"}
     ])
   | .columns as $fields
@@ -426,7 +440,8 @@ run_jq "Average Draft to Publish by API panel wiring" -e '
   | .targets[]
   | select(.url == "/metrics/average-draft-to-publish-by-api")
   | select((.url_options.params // []) == [
-      {"key":"days","value":"30"},
+      {"key":"from","value":"${__timeFrom}"},
+      {"key":"to","value":"${__timeTo}"},
       {"key":"unit","value":"${publish_duration_unit}"}
     ])
   | .columns as $fields

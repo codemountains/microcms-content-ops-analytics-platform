@@ -20,6 +20,18 @@ pub(crate) use top_updated_contents::query_top_updated_contents_rows;
 pub(crate) const JST_OFFSET_INTERVAL: &str = "9 HOURS";
 pub(crate) const PARTITION_TIME_JST_SUFFIX: &str = "T00:00:00+09:00";
 
+pub(crate) fn time_range_bounds_cte(from_ms: i64, to_ms: i64) -> String {
+    format!(
+        r#"
+        bounds AS (
+          SELECT
+            CAST(epoch_ms({from_ms}) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) AS start_date,
+            CAST(epoch_ms({to_ms}) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) AS end_date
+        )
+        "#
+    )
+}
+
 #[cfg(test)]
 pub(crate) fn format_partition_time(dt: &str) -> String {
     format!("{dt}{PARTITION_TIME_JST_SUFFIX}")

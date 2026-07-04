@@ -1,14 +1,15 @@
 use duckdb::Connection;
 
 use super::event_kind;
-use super::{ApiActivityRow, JST_OFFSET_INTERVAL, collect_rows};
+use super::{ApiActivityRow, collect_rows, time_range_bounds_cte};
 
 pub(crate) fn query_api_activity_rows(
     connection: &Connection,
     events_sql: &str,
-    days: u32,
+    from_ms: i64,
+    to_ms: i64,
 ) -> duckdb::Result<Vec<ApiActivityRow>> {
-    let days_minus_one = days - 1;
+    let bounds = time_range_bounds_cte(from_ms, to_ms);
     let initial_draft = event_kind::INITIAL_DRAFT;
     let save_draft = event_kind::SAVE_DRAFT;
     let publish_from_draft = event_kind::PUBLISH_FROM_DRAFT;
@@ -25,6 +26,7 @@ pub(crate) fn query_api_activity_rows(
     let delete_closed = event_kind::DELETE_CLOSED;
     let sql = format!(
         r#"
+        WITH {bounds}
         SELECT
           api,
           SUM(CASE WHEN event_kind = '{initial_draft}' THEN 1 ELSE 0 END) AS initial_draft_count,
@@ -43,7 +45,9 @@ pub(crate) fn query_api_activity_rows(
           SUM(CASE WHEN event_kind = '{delete_closed}' THEN 1 ELSE 0 END) AS delete_closed_count,
           COUNT(*) AS total_count
         FROM {events_sql}
-        WHERE dt >= CAST(CAST(current_timestamp AS TIMESTAMP) + INTERVAL '{JST_OFFSET_INTERVAL}' AS DATE) - INTERVAL '{days_minus_one} DAY'
+        WHERE
+          dt >= (SELECT start_date FROM bounds)
+          AND dt <= (SELECT end_date FROM bounds)
         GROUP BY api
         ORDER BY total_count DESC, api
         "#
@@ -71,4 +75,41 @@ pub(crate) fn query_api_activity_rows(
         })
     })?;
     collect_rows(rows)
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::DateTime;
+    use duckdb::Connection;
+
+    use super::*;
+
+    #[test]
+    fn filters_api_activity_by_selected_time_range() {
+        let connection = Connection::open_in_memory().unwrap();
+        let from_ms = DateTime::parse_from_rfc3339("2026-06-30T00:00:00+09:00")
+            .unwrap()
+            .timestamp_millis();
+        let to_ms = DateTime::parse_from_rfc3339("2026-06-30T23:59:59+09:00")
+            .unwrap()
+            .timestamp_millis();
+        let events_sql = r#"
+            (
+              SELECT DATE '2026-06-29' AS dt, 'blogs' AS api, 'INITIAL_DRAFT' AS event_kind
+              UNION ALL
+              SELECT DATE '2026-06-30', 'blogs', 'PUBLISH_FROM_DRAFT'
+              UNION ALL
+              SELECT DATE '2026-07-01', 'blogs', 'INITIAL_PUBLISH'
+            )
+        "#;
+
+        let rows = query_api_activity_rows(&connection, events_sql, from_ms, to_ms).unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].api.as_deref(), Some("blogs"));
+        assert_eq!(rows[0].initial_draft_count, 0);
+        assert_eq!(rows[0].publish_from_draft_count, 1);
+        assert_eq!(rows[0].initial_publish_count, 0);
+        assert_eq!(rows[0].total_count, 1);
+    }
 }
