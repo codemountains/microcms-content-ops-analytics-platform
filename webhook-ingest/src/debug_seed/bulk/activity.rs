@@ -13,6 +13,7 @@ const BULK_WEIGHT_REPUBLISH_FROM_CLOSED: u32 = 8;
 const BULK_WEIGHT_DELETE_DRAFT: u32 = 20;
 const BULK_WEIGHT_DELETE_PUBLISHED: u32 = 60;
 const BULK_WEIGHT_DELETE_CLOSED: u32 = 10;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::debug_seed) struct ActivityTargets {
     pub(in crate::debug_seed) initial_draft: u32,
