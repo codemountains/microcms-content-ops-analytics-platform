@@ -240,7 +240,7 @@ run_jq "api_activity_view dashboard variable" -e '
     )
     and any(
       $options[];
-      .text == "詳細 (14種)"
+      .text == "詳細"
         and .value == "^(api|initial_draft|save_draft|publish_from_draft|initial_publish|update_published|add_draft_to_published|discard_draft_on_published|unpublish_to_draft|unpublish_to_closed|reopen_to_draft|republish_from_closed|delete_draft|delete_published|delete_closed)$"
     )
 '
