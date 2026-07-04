@@ -846,6 +846,9 @@ ORDER BY avg_days DESC, drafts.api;
 Grafana は `duckdb-query-api` に HTTP request を送り、JSON response をパネルとして可視化する。
 ローカル Docker Compose では file provisioning を使い、AWS デプロイ後は既存の Grafana Cloud stack に対して HTTP API で同じ datasource / dashboard を反映できるようにする。
 Grafana Cloud stack 自体の作成、plugin 自動 install、Cloud Access Policy token を使う plugin 管理は初期スコープ外とする。
+`grafana/dashboards/microcms-content-ops-analytics.json` は Grafana dashboard v2 resource schema（`apiVersion: dashboard.grafana.app/v2`、`kind: Dashboard`、`spec.elements` / `spec.layout`）を source of truth とする。
+ローカル file provisioning でも Kubernetes resource 形式の dashboard JSON を読み込ませる。
+Grafana 13 UI で provisioned dashboard を編集・保存した場合でも、UI の保存内容は provisioning source へ自動反映されないため、変更を採用する場合は V2 Resource JSON として export し、`scripts/validate-grafana-dashboard.sh` で data-loss がないことを確認してから repository の JSON を更新する。
 
 初期ダッシュボードでは、次のパネルを想定する。
 
@@ -898,7 +901,8 @@ Grafana Cloud provisioning は次の contract とする。
 - 既存 Grafana Cloud stack の URL と service account token を入力として使う。
 - `QUERY_API_URL` が未指定の場合は `infra/aws` の OpenTofu output `query_api_url` を使う。
 - datasource uid は `duckdb-query-api`、type は `yesoreyeram-infinity-datasource`、`access` は `proxy` とする。
-- dashboard uid は既定で `microcms-content-ops` とし、`grafana/dashboards/microcms-content-ops-analytics.json` を冪等に upsert する。
+- dashboard uid は既定で `microcms-content-ops`、namespace は既定で `default` とし、`grafana/dashboards/microcms-content-ops-analytics.json` を `PUT /apis/dashboard.grafana.app/v2/namespaces/:namespace/dashboards/:uid` で冪等に upsert する。
+- `GRAFANA_FOLDER_UID` を指定した場合は `metadata.annotations["grafana.app/folder"]` として設定し、未指定で既存 dashboard がある場合は既存 folder annotation を維持する。
 - `yesoreyeram-infinity-datasource` と `tim012432-calendarheatmap-panel` は Grafana Cloud stack に事前インストール済みであることを前提にする。未インストール時は明確に失敗し、明示 opt-out の場合だけ確認を skip できる。
 
 ## 9. セキュリティ仕様
@@ -1003,7 +1007,6 @@ microcms_events_compacted/
 - Management API による初期バックフィル
 - API ごとの schema 拡張
 - CloudWatch Logs / Metrics 連携
-- Grafana 13 の新 dashboard API への移行
 - ECS Fargate での `duckdb-query-api` 常時稼働
 - Basic 認証または reverse proxy による API 保護
 - S3 lifecycle policy による保存期間管理

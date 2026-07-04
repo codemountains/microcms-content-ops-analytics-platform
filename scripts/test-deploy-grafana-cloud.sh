@@ -132,9 +132,12 @@ case "$path" in
       body='{"message":"Data source not found"}'
     fi
     ;;
-  /api/dashboards/uid/microcms-content-ops)
-    if [[ "$FAKE_CURL_MODE" = datasource-existing* ]]; then
-      body='{"dashboard":{"uid":"microcms-content-ops"},"meta":{"folderUid":"existing-folder"}}'
+  /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/microcms-content-ops)
+    if [[ "$method" = "PUT" && -n "$data_file" ]]; then
+      cp "$data_file" "$FAKE_CURL_TMP/dashboard.json"
+      body='{"kind":"Dashboard","apiVersion":"dashboard.grafana.app/v2","metadata":{"name":"microcms-content-ops"}}'
+    elif [[ "$FAKE_CURL_MODE" = datasource-existing* ]]; then
+      body='{"metadata":{"name":"microcms-content-ops","resourceVersion":"123","annotations":{"grafana.app/folder":"existing-folder"}}}'
     else
       status=404
       body='{"message":"Dashboard not found"}'
@@ -147,15 +150,6 @@ case "$path" in
     elif [[ -n "$data_file" ]]; then
       cp "$data_file" "$FAKE_CURL_TMP/datasource-create.json"
       body='{"message":"Datasource added"}'
-    fi
-    ;;
-  /api/dashboards/db)
-    if [[ "$method" != "POST" ]]; then
-      status=405
-      body='{"message":"unexpected method"}'
-    elif [[ -n "$data_file" ]]; then
-      cp "$data_file" "$FAKE_CURL_TMP/dashboard.json"
-      body='{"status":"success","uid":"microcms-content-ops"}'
     fi
     ;;
   *)
@@ -228,14 +222,14 @@ test_create_datasource_and_dashboard() {
   assert_contains "$FAKE_CURL_LOG" "GET /api/plugins/yesoreyeram-infinity-datasource/settings"
   assert_contains "$FAKE_CURL_LOG" "GET /api/datasources/uid/duckdb-query-api"
   assert_contains "$FAKE_CURL_LOG" "POST /api/datasources"
-  assert_contains "$FAKE_CURL_LOG" "POST /api/dashboards/db"
+  assert_contains "$FAKE_CURL_LOG" "PUT /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/microcms-content-ops"
   assert_not_contains "$FAKE_CURL_LOG" "secret-token"
 
   assert_json "$FAKE_CURL_TMP/datasource-create.json" \
     '.uid == "duckdb-query-api" and .type == "yesoreyeram-infinity-datasource" and .access == "proxy" and .url == "http://alb.example.local" and .isDefault == false' \
     "datasource create payload did not match"
   assert_json "$FAKE_CURL_TMP/dashboard.json" \
-    '.overwrite == true and .folderUid == "ops" and .dashboard.id == null and .dashboard.uid == "microcms-content-ops"' \
+    '.apiVersion == "dashboard.grafana.app/v2" and .kind == "Dashboard" and .metadata.name == "microcms-content-ops" and .metadata.annotations["grafana.app/folder"] == "ops"' \
     "dashboard payload did not match"
 }
 
@@ -251,7 +245,7 @@ test_update_existing_datasource_with_explicit_query_url() {
     '.uid == "duckdb-query-api" and .url == "https://query.example.com" and .isDefault == false' \
     "datasource update payload did not match"
   assert_json "$FAKE_CURL_TMP/dashboard.json" \
-    '.folderUid == "existing-folder"' \
+    '.metadata.annotations["grafana.app/folder"] == "existing-folder" and .metadata.resourceVersion == "123"' \
     "dashboard payload did not preserve existing folder"
 }
 
@@ -286,7 +280,7 @@ test_plugin_missing_can_be_skipped() {
     QUERY_API_URL="https://query.example.com" \
     GRAFANA_SKIP_PLUGIN_CHECK=1 \
     "$SCRIPT"
-  assert_contains "$FAKE_CURL_LOG" "POST /api/dashboards/db"
+  assert_contains "$FAKE_CURL_LOG" "PUT /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/microcms-content-ops"
 }
 
 test_missing_required_env

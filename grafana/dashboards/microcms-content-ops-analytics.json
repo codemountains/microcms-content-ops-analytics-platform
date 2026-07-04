@@ -1,1853 +1,2189 @@
 {
-  "annotations": {
-    "list": []
-  },
-  "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": null,
-  "links": [],
-  "panels": [
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "duckdb-query-api"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
-        "y": 43
-      },
-      "id": 1,
-      "options": {
-        "aggregation": "sum",
-        "autoRectSize": true,
-        "colorScheme": "green",
-        "emptyColor": "#ebedf0",
-        "radius": 2,
-        "rectSize": 12,
-        "showLegend": true,
-        "showMonthLabels": true,
-        "showTooltip": true,
-        "showWeekLabels": true,
-        "space": 2,
-        "weekStart": "sunday"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "duckdb-query-api"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "root_selector": "$",
-          "url": "/metrics/calendar-heatmap",
-          "url_options": {
-            "method": "GET",
-            "params": [
-              {
-                "key": "from",
-                "value": "${__timeFrom}"
-              },
-              {
-                "key": "to",
-                "value": "${__timeTo}"
-              }
-            ],
-            "data": ""
-          },
-          "columns": [
-            {
-              "selector": "time",
-              "text": "time",
-              "type": "timestamp"
-            },
-            {
-              "selector": "value",
-              "text": "value",
-              "type": "number"
-            }
-          ],
-          "data": "",
-          "filters": [],
-          "global_query_id": ""
-        }
-      ],
-      "title": "Calendar Heatmap",
-      "description": "Webhook 受信日（S3 パーティション dt、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（${__timeFrom} / ${__timeTo}）で絞り込み、0 件の日も表示します。",
-      "type": "tim012432-calendarheatmap-panel"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "duckdb-query-api"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 0,
-        "y": 20
-      },
-      "id": 6,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.0.0",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "duckdb-query-api"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "root_selector": "$",
-          "url": "/metrics/publish-action-summary",
-          "url_options": {
-            "method": "GET",
-            "params": [
-              {
-                "key": "from",
-                "value": "${__timeFrom}"
-              },
-              {
-                "key": "to",
-                "value": "${__timeTo}"
-              }
-            ],
-            "data": ""
-          },
-          "columns": [
-            {
-              "selector": "publish_count",
-              "text": "publish_count",
-              "type": "number"
-            }
-          ],
-          "data": "",
-          "filters": [],
-          "global_query_id": ""
-        }
-      ],
-      "title": "Publish Count",
-      "description": "ダッシュボードの time range 内にある PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED の合計数を表示します。日付境界は JST の dt partition に揃えます。",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "duckdb-query-api"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 1,
-          "min": 0,
-          "max": 1,
-          "unit": "percentunit",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.25
-              },
-              {
-                "color": "green",
-                "value": 0.5
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 12,
-        "y": 20
-      },
-      "id": 7,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "pluginVersion": "12.0.0",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "duckdb-query-api"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "root_selector": "$",
-          "url": "/metrics/publish-action-summary",
-          "url_options": {
-            "method": "GET",
-            "params": [
-              {
-                "key": "from",
-                "value": "${__timeFrom}"
-              },
-              {
-                "key": "to",
-                "value": "${__timeTo}"
-              }
-            ],
-            "data": ""
-          },
-          "columns": [
-            {
-              "selector": "published_state_rate",
-              "text": "published_state_rate",
-              "type": "number"
-            }
-          ],
-          "data": "",
-          "filters": [],
-          "global_query_id": ""
-        }
-      ],
-      "title": "Published State Rate",
-      "description": "ダッシュボードの time range 内にある状態到達・維持イベントのうち公開状態に到達・維持した割合を表示します。ADD_DRAFT_TO_PUBLISHED / DISCARD_DRAFT_ON_PUBLISHED / DELETE_* は除外し、分母が 0 件の場合は null です。",
-      "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "duckdb-query-api"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 0,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 12
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.0.0",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "duckdb-query-api"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "root_selector": "$",
-          "url": "/metrics/publish-action-trend",
-          "url_options": {
-            "method": "GET",
-            "params": [
-              {
-                "key": "from",
-                "value": "${__timeFrom}"
-              },
-              {
-                "key": "to",
-                "value": "${__timeTo}"
-              }
-            ],
-            "data": ""
-          },
-          "columns": [
-            {
-              "selector": "time",
-              "text": "time",
-              "type": "timestamp"
-            },
-            {
-              "selector": "publish_from_draft_count",
-              "text": "publish_from_draft",
-              "type": "number"
-            },
-            {
-              "selector": "initial_publish_count",
-              "text": "initial_publish",
-              "type": "number"
-            },
-            {
-              "selector": "republish_from_closed_count",
-              "text": "republish_from_closed",
-              "type": "number"
-            }
-          ],
-          "data": "",
-          "filters": [],
-          "global_query_id": ""
-        }
-      ],
-      "title": "Publish Action Trend",
-      "description": "日別の PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED 件数を stacked bar で表示します。ダッシュボードの time range を JST 日付でゼロ埋めします。",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "duckdb-query-api"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "decimals": 0,
-          "min": 0,
-          "unit": "short"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "draft_activity"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "下書き操作"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "publish_activity"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "公開・更新"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "unpublish_activity"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "非公開・再開"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "orange",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "delete_activity"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "削除"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "initial_draft"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "初回下書き"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "semi-dark-blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "save_draft"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "下書き保存"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "add_draft_to_published"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "公開中に下書き追加"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "light-blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "discard_draft_on_published"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "公開中の下書き破棄"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "super-light-blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "publish_from_draft"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "下書きから公開"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "semi-dark-green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "initial_publish"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "初回公開"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "update_published"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "公開中更新"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "light-green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "republish_from_closed"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "非公開から再公開"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "super-light-green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "unpublish_to_draft"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "公開から下書き"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "semi-dark-orange",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "unpublish_to_closed"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "公開から非公開"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "orange",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "reopen_to_draft"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "非公開から下書き"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "light-orange",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "delete_draft"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "下書き削除"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "semi-dark-red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "delete_published"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "公開削除"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "delete_closed"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "非公開削除"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "light-red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 12,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 2,
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true,
-          "calcs": [
-            "sum"
-          ]
-        },
-        "orientation": "horizontal",
-        "showValue": "never",
-        "stacking": "normal",
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "duckdb-query-api"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "root_selector": "$",
-          "url": "/metrics/api-activity",
-          "url_options": {
-            "method": "GET",
-            "params": [
-              {
-                "key": "from",
-                "value": "${__timeFrom}"
-              },
-              {
-                "key": "to",
-                "value": "${__timeTo}"
-              }
-            ],
-            "data": ""
-          },
-          "columns": [
-            {
-              "selector": "api",
-              "text": "api",
-              "type": "string"
-            },
-            {
-              "selector": "initial_draft_count",
-              "text": "initial_draft",
-              "type": "number"
-            },
-            {
-              "selector": "save_draft_count",
-              "text": "save_draft",
-              "type": "number"
-            },
-            {
-              "selector": "publish_from_draft_count",
-              "text": "publish_from_draft",
-              "type": "number"
-            },
-            {
-              "selector": "initial_publish_count",
-              "text": "initial_publish",
-              "type": "number"
-            },
-            {
-              "selector": "update_published_count",
-              "text": "update_published",
-              "type": "number"
-            },
-            {
-              "selector": "add_draft_to_published_count",
-              "text": "add_draft_to_published",
-              "type": "number"
-            },
-            {
-              "selector": "discard_draft_on_published_count",
-              "text": "discard_draft_on_published",
-              "type": "number"
-            },
-            {
-              "selector": "unpublish_to_draft_count",
-              "text": "unpublish_to_draft",
-              "type": "number"
-            },
-            {
-              "selector": "unpublish_to_closed_count",
-              "text": "unpublish_to_closed",
-              "type": "number"
-            },
-            {
-              "selector": "reopen_to_draft_count",
-              "text": "reopen_to_draft",
-              "type": "number"
-            },
-            {
-              "selector": "republish_from_closed_count",
-              "text": "republish_from_closed",
-              "type": "number"
-            },
-            {
-              "selector": "delete_draft_count",
-              "text": "delete_draft",
-              "type": "number"
-            },
-            {
-              "selector": "delete_published_count",
-              "text": "delete_published",
-              "type": "number"
-            },
-            {
-              "selector": "delete_closed_count",
-              "text": "delete_closed",
-              "type": "number"
-            }
-          ],
-          "data": "",
-          "filters": [],
-          "global_query_id": ""
-        }
-      ],
-      "title": "API Activity",
-      "description": "API ごとの event_kind 件数。ダッシュボードの time range で絞り込み、既定は下書き操作 / 公開・更新 / 非公開・再開 / 削除の 4 カテゴリ集約を horizontal stacked bar で表示します。上部の api_activity_view で 14 種の詳細内訳に切り替えられます。",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "indexByName": {
-              "api": 0,
-              "initial_draft": 1,
-              "save_draft": 2,
-              "publish_from_draft": 3,
-              "initial_publish": 4,
-              "update_published": 5,
-              "add_draft_to_published": 6,
-              "discard_draft_on_published": 7,
-              "unpublish_to_draft": 8,
-              "unpublish_to_closed": 9,
-              "reopen_to_draft": 10,
-              "republish_from_closed": 11,
-              "delete_draft": 12,
-              "delete_published": 13,
-              "delete_closed": 14
-            }
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "draft_activity",
-            "mode": "reduceRow",
-            "reduce": {
-              "include": [
-                "initial_draft",
-                "save_draft",
-                "add_draft_to_published",
-                "discard_draft_on_published"
-              ],
-              "reducer": "sum"
-            },
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "publish_activity",
-            "mode": "reduceRow",
-            "reduce": {
-              "include": [
-                "publish_from_draft",
-                "initial_publish",
-                "update_published",
-                "republish_from_closed"
-              ],
-              "reducer": "sum"
-            },
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "unpublish_activity",
-            "mode": "reduceRow",
-            "reduce": {
-              "include": [
-                "unpublish_to_draft",
-                "unpublish_to_closed",
-                "reopen_to_draft"
-              ],
-              "reducer": "sum"
-            },
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "delete_activity",
-            "mode": "reduceRow",
-            "reduce": {
-              "include": [
-                "delete_draft",
-                "delete_published",
-                "delete_closed"
-              ],
-              "reducer": "sum"
-            },
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "pattern": "${api_activity_view}"
-            }
-          }
-        }
-      ],
-      "type": "barchart"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "duckdb-query-api"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "last_event_at"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "dateTimeAsLocal"
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 34
-      },
-      "id": 3,
-      "options": {
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "duckdb-query-api"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "root_selector": "$",
-          "url": "/metrics/top-updated-contents",
-          "url_options": {
-            "method": "GET",
-            "params": [
-              {
-                "key": "from",
-                "value": "${__timeFrom}"
-              },
-              {
-                "key": "to",
-                "value": "${__timeTo}"
-              },
-              {
-                "key": "limit",
-                "value": "20"
-              }
-            ],
-            "data": ""
-          },
-          "columns": [
-            {
-              "selector": "api",
-              "text": "api",
-              "type": "string"
-            },
-            {
-              "selector": "content_id",
-              "text": "content_id",
-              "type": "string"
-            },
-            {
-              "selector": "count",
-              "text": "updated_count",
-              "type": "number"
-            },
-            {
-              "selector": "last_event_at",
-              "text": "last_event_at",
-              "type": "timestamp"
-            }
-          ],
-          "data": "",
-          "filters": [],
-          "global_query_id": ""
-        }
-      ],
-      "title": "Top Updated Contents",
-      "description": "event_type が new または edit で content_id があるイベントを対象に、ダッシュボードの time range 内で更新回数が多いコンテンツ上位 20 件を表示します。updated_count は API の count、last_event_at は最終イベント時刻です。",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "indexByName": {
-              "api": 0,
-              "content_id": 1,
-              "updated_count": 2,
-              "last_event_at": 3
-            }
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "duckdb-query-api"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "avg_days"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "d"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 1
-                    },
-                    {
-                      "color": "red",
-                      "value": 3
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "avg_hours"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "h"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 24
-                    },
-                    {
-                      "color": "red",
-                      "value": 72
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 25
-      },
-      "id": 4,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "orientation": "horizontal",
-        "showValue": "always",
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "duckdb-query-api"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "root_selector": "$",
-          "url": "/metrics/average-time-to-publish-by-api",
-          "url_options": {
-            "method": "GET",
-            "params": [
-              {
-                "key": "from",
-                "value": "${__timeFrom}"
-              },
-              {
-                "key": "to",
-                "value": "${__timeTo}"
-              },
-              {
-                "key": "unit",
-                "value": "${publish_duration_unit}"
-              }
-            ],
-            "data": ""
-          },
-          "columns": [
-            {
-              "selector": "api",
-              "text": "api",
-              "type": "string"
-            },
-            {
-              "selector": "avg_days",
-              "text": "avg_days",
-              "type": "number"
-            },
-            {
-              "selector": "avg_hours",
-              "text": "avg_hours",
-              "type": "number"
-            }
-          ],
-          "data": "",
-          "filters": [],
-          "global_query_id": ""
-        }
-      ],
-      "title": "Average Time to Publish by API",
-      "description": "API ごとに、コンテンツ作成（publishValue.createdAt）から公開到達（publishValue.publishedAt）までの平均所要時間を表示します。PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED を対象にダッシュボードの time range で絞り込み、publish_duration_unit で日数 / 時間を切り替えます。",
-      "transformations": [
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "pattern": "^(api|avg_${publish_duration_unit})$"
-            }
-          }
-        }
-      ],
-      "type": "barchart"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "duckdb-query-api"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "avg_days"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "d"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 1
-                    },
-                    {
-                      "color": "red",
-                      "value": 3
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "avg_hours"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "h"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 24
-                    },
-                    {
-                      "color": "red",
-                      "value": 72
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 34
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "orientation": "horizontal",
-        "showValue": "always",
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "duckdb-query-api"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "root_selector": "$",
-          "url": "/metrics/average-draft-to-publish-by-api",
-          "url_options": {
-            "method": "GET",
-            "params": [
-              {
-                "key": "from",
-                "value": "${__timeFrom}"
-              },
-              {
-                "key": "to",
-                "value": "${__timeTo}"
-              },
-              {
-                "key": "unit",
-                "value": "${publish_duration_unit}"
-              }
-            ],
-            "data": ""
-          },
-          "columns": [
-            {
-              "selector": "api",
-              "text": "api",
-              "type": "string"
-            },
-            {
-              "selector": "avg_days",
-              "text": "avg_days",
-              "type": "number"
-            },
-            {
-              "selector": "avg_hours",
-              "text": "avg_hours",
-              "type": "number"
-            }
-          ],
-          "data": "",
-          "filters": [],
-          "global_query_id": ""
-        }
-      ],
-      "title": "Average Draft to Publish by API",
-      "description": "API ごとに、下書き作成（draftValue.createdAt）から下書き経由公開（publishValue.publishedAt）までの平均所要時間を表示します。同一 api / content_id の INITIAL_DRAFT と PUBLISH_FROM_DRAFT を結合します。期間フィルタは PUBLISH_FROM_DRAFT 側の dt に適用し、ダッシュボードの time range で絞り込みます。",
-      "transformations": [
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "pattern": "^(api|avg_${publish_duration_unit})$"
-            }
-          }
-        }
-      ],
-      "type": "barchart"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "duckdb-query-api"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "decimals": 0,
-          "min": 0,
-          "unit": "short"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "draft_activity"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "下書き操作"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "publish_activity"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "公開・更新"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "unpublish_activity"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "非公開・再開"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "orange",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "delete_activity"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "削除"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 25
-      },
-      "id": 9,
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true,
-          "values": [
-            "value",
-            "percent"
-          ]
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "duckdb-query-api"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "root_selector": "$",
-          "url": "/metrics/api-activity",
-          "url_options": {
-            "method": "GET",
-            "params": [
-              {
-                "key": "from",
-                "value": "${__timeFrom}"
-              },
-              {
-                "key": "to",
-                "value": "${__timeTo}"
-              }
-            ],
-            "data": ""
-          },
-          "columns": [
-            {
-              "selector": "api",
-              "text": "api",
-              "type": "string"
-            },
-            {
-              "selector": "initial_draft_count",
-              "text": "initial_draft",
-              "type": "number"
-            },
-            {
-              "selector": "save_draft_count",
-              "text": "save_draft",
-              "type": "number"
-            },
-            {
-              "selector": "publish_from_draft_count",
-              "text": "publish_from_draft",
-              "type": "number"
-            },
-            {
-              "selector": "initial_publish_count",
-              "text": "initial_publish",
-              "type": "number"
-            },
-            {
-              "selector": "update_published_count",
-              "text": "update_published",
-              "type": "number"
-            },
-            {
-              "selector": "add_draft_to_published_count",
-              "text": "add_draft_to_published",
-              "type": "number"
-            },
-            {
-              "selector": "discard_draft_on_published_count",
-              "text": "discard_draft_on_published",
-              "type": "number"
-            },
-            {
-              "selector": "unpublish_to_draft_count",
-              "text": "unpublish_to_draft",
-              "type": "number"
-            },
-            {
-              "selector": "unpublish_to_closed_count",
-              "text": "unpublish_to_closed",
-              "type": "number"
-            },
-            {
-              "selector": "reopen_to_draft_count",
-              "text": "reopen_to_draft",
-              "type": "number"
-            },
-            {
-              "selector": "republish_from_closed_count",
-              "text": "republish_from_closed",
-              "type": "number"
-            },
-            {
-              "selector": "delete_draft_count",
-              "text": "delete_draft",
-              "type": "number"
-            },
-            {
-              "selector": "delete_published_count",
-              "text": "delete_published",
-              "type": "number"
-            },
-            {
-              "selector": "delete_closed_count",
-              "text": "delete_closed",
-              "type": "number"
-            }
-          ],
-          "data": "",
-          "filters": [],
-          "global_query_id": ""
-        }
-      ],
-      "title": "Operation Category Breakdown",
-      "description": "ダッシュボードの time range 内の全 API を合算し、event_kind を 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）に集約した操作構成比を円グラフで表示します。カテゴリ定義は API Activity と共通です。",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "indexByName": {
-              "api": 0,
-              "initial_draft": 1,
-              "save_draft": 2,
-              "publish_from_draft": 3,
-              "initial_publish": 4,
-              "update_published": 5,
-              "add_draft_to_published": 6,
-              "discard_draft_on_published": 7,
-              "unpublish_to_draft": 8,
-              "unpublish_to_closed": 9,
-              "reopen_to_draft": 10,
-              "republish_from_closed": 11,
-              "delete_draft": 12,
-              "delete_published": 13,
-              "delete_closed": 14
-            }
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "draft_activity",
-            "mode": "reduceRow",
-            "reduce": {
-              "include": [
-                "initial_draft",
-                "save_draft",
-                "add_draft_to_published",
-                "discard_draft_on_published"
-              ],
-              "reducer": "sum"
-            },
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "publish_activity",
-            "mode": "reduceRow",
-            "reduce": {
-              "include": [
-                "publish_from_draft",
-                "initial_publish",
-                "update_published",
-                "republish_from_closed"
-              ],
-              "reducer": "sum"
-            },
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "unpublish_activity",
-            "mode": "reduceRow",
-            "reduce": {
-              "include": [
-                "unpublish_to_draft",
-                "unpublish_to_closed",
-                "reopen_to_draft"
-              ],
-              "reducer": "sum"
-            },
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "calculateField",
-          "options": {
-            "alias": "delete_activity",
-            "mode": "reduceRow",
-            "reduce": {
-              "include": [
-                "delete_draft",
-                "delete_published",
-                "delete_closed"
-              ],
-              "reducer": "sum"
-            },
-            "replaceFields": false
-          }
-        },
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "pattern": "^(draft_activity|publish_activity|unpublish_activity|delete_activity)$"
-            }
-          }
-        },
-        {
-          "id": "reduce",
-          "options": {
-            "mode": "reduceFields",
-            "reducers": [
-              "sum"
-            ]
-          }
-        }
-      ],
-      "type": "piechart"
+  "apiVersion": "dashboard.grafana.app/v2",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "microcms-content-ops",
+    "annotations": {
+      "grafana.app/message": "Migrated to dashboard.grafana.app/v2 resource schema",
+      "microcms-content-ops/source-schema": "classic-v1-schemaVersion-41"
     }
-  ],
-  "preload": false,
-  "refresh": "5m",
-  "schemaVersion": 41,
-  "tags": [
-    "microcms",
-    "content-ops"
-  ],
-  "templating": {
-    "list": [
+  },
+  "spec": {
+    "title": "microCMS Content Ops Analytics",
+    "description": "",
+    "editable": true,
+    "tags": [
+      "microcms",
+      "content-ops"
+    ],
+    "preload": false,
+    "cursorSync": "Off",
+    "links": [],
+    "annotations": [],
+    "variables": [
       {
-        "current": {
-          "selected": true,
-          "text": "カテゴリ集約",
-          "value": "^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$"
-        },
-        "hide": 0,
-        "includeAll": false,
-        "label": "API Activity",
-        "multi": false,
-        "name": "api_activity_view",
-        "options": [
-          {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "api_activity_view",
+          "query": "カテゴリ集約 : ^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$,詳細 : ^(api|initial_draft|save_draft|publish_from_draft|initial_publish|update_published|add_draft_to_published|discard_draft_on_published|unpublish_to_draft|unpublish_to_closed|reopen_to_draft|republish_from_closed|delete_draft|delete_published|delete_closed)$",
+          "current": {
             "selected": true,
             "text": "カテゴリ集約",
             "value": "^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$"
           },
-          {
-            "selected": false,
-            "text": "詳細",
-            "value": "^(api|initial_draft|save_draft|publish_from_draft|initial_publish|update_published|add_draft_to_published|discard_draft_on_published|unpublish_to_draft|unpublish_to_closed|reopen_to_draft|republish_from_closed|delete_draft|delete_published|delete_closed)$"
-          }
-        ],
-        "query": "カテゴリ集約 : ^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$,詳細 : ^(api|initial_draft|save_draft|publish_from_draft|initial_publish|update_published|add_draft_to_published|discard_draft_on_published|unpublish_to_draft|unpublish_to_closed|reopen_to_draft|republish_from_closed|delete_draft|delete_published|delete_closed)$",
-        "queryValue": "",
-        "skipUrlSync": false,
-        "type": "custom"
+          "options": [
+            {
+              "selected": true,
+              "text": "カテゴリ集約",
+              "value": "^(api|draft_activity|publish_activity|unpublish_activity|delete_activity)$"
+            },
+            {
+              "selected": false,
+              "text": "詳細",
+              "value": "^(api|initial_draft|save_draft|publish_from_draft|initial_publish|update_published|add_draft_to_published|discard_draft_on_published|unpublish_to_draft|unpublish_to_closed|reopen_to_draft|republish_from_closed|delete_draft|delete_published|delete_closed)$"
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "hide": "",
+          "skipUrlSync": false,
+          "allowCustomValue": false,
+          "label": "API Activity"
+        }
       },
       {
-        "current": {
-          "selected": true,
-          "text": "days",
-          "value": "days"
-        },
-        "hide": 0,
-        "includeAll": false,
-        "label": "Publish duration unit",
-        "multi": false,
-        "name": "publish_duration_unit",
-        "options": [
-          {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "publish_duration_unit",
+          "query": "days,hours",
+          "current": {
             "selected": true,
             "text": "days",
             "value": "days"
           },
-          {
-            "selected": false,
-            "text": "hours",
-            "value": "hours"
-          }
-        ],
-        "query": "days,hours",
-        "queryValue": "",
-        "skipUrlSync": false,
-        "type": "custom"
+          "options": [
+            {
+              "selected": true,
+              "text": "days",
+              "value": "days"
+            },
+            {
+              "selected": false,
+              "text": "hours",
+              "value": "hours"
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "hide": "",
+          "skipUrlSync": false,
+          "allowCustomValue": false,
+          "label": "Publish duration unit"
+        }
       }
-    ]
+    ],
+    "timeSettings": {
+      "from": "now-365d",
+      "to": "now",
+      "timezone": "Asia/Tokyo",
+      "autoRefresh": "5m",
+      "autoRefreshIntervals": [],
+      "hideTimepicker": false,
+      "fiscalYearStartMonth": 0
+    },
+    "elements": {
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1,
+          "title": "Calendar Heatmap",
+          "description": "Webhook 受信日（S3 パーティション dt、JST カレンダー日）ごとのイベント件数。ダッシュボードの time range（${__timeFrom} / ${__timeTo}）で絞り込み、0 件の日も表示します。",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "yesoreyeram-infinity-datasource",
+                      "version": "",
+                      "datasource": {
+                        "type": "yesoreyeram-infinity-datasource",
+                        "uid": "duckdb-query-api"
+                      },
+                      "spec": {
+                        "type": "json",
+                        "source": "url",
+                        "parser": "backend",
+                        "format": "table",
+                        "root_selector": "$",
+                        "url": "/metrics/calendar-heatmap",
+                        "url_options": {
+                          "method": "GET",
+                          "params": [
+                            {
+                              "key": "from",
+                              "value": "${__timeFrom}"
+                            },
+                            {
+                              "key": "to",
+                              "value": "${__timeTo}"
+                            }
+                          ],
+                          "data": ""
+                        },
+                        "columns": [
+                          {
+                            "selector": "time",
+                            "text": "time",
+                            "type": "timestamp"
+                          },
+                          {
+                            "selector": "value",
+                            "text": "value",
+                            "type": "number"
+                          }
+                        ],
+                        "data": "",
+                        "filters": [],
+                        "global_query_id": ""
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "tim012432-calendarheatmap-panel",
+            "version": "",
+            "spec": {
+              "options": {
+                "aggregation": "sum",
+                "autoRectSize": true,
+                "colorScheme": "green",
+                "emptyColor": "#ebedf0",
+                "radius": 2,
+                "rectSize": 12,
+                "showLegend": true,
+                "showMonthLabels": true,
+                "showTooltip": true,
+                "showWeekLabels": true,
+                "space": 2,
+                "weekStart": "sunday"
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
+          "title": "Publish Count",
+          "description": "ダッシュボードの time range 内にある PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED の合計数を表示します。日付境界は JST の dt partition に揃えます。",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "yesoreyeram-infinity-datasource",
+                      "version": "",
+                      "datasource": {
+                        "type": "yesoreyeram-infinity-datasource",
+                        "uid": "duckdb-query-api"
+                      },
+                      "spec": {
+                        "type": "json",
+                        "source": "url",
+                        "parser": "backend",
+                        "format": "table",
+                        "root_selector": "$",
+                        "url": "/metrics/publish-action-summary",
+                        "url_options": {
+                          "method": "GET",
+                          "params": [
+                            {
+                              "key": "from",
+                              "value": "${__timeFrom}"
+                            },
+                            {
+                              "key": "to",
+                              "value": "${__timeTo}"
+                            }
+                          ],
+                          "data": ""
+                        },
+                        "columns": [
+                          {
+                            "selector": "publish_count",
+                            "text": "publish_count",
+                            "type": "number"
+                          }
+                        ],
+                        "data": "",
+                        "filters": [],
+                        "global_query_id": ""
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "12.0.0",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 0,
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "Published State Rate",
+          "description": "ダッシュボードの time range 内にある状態到達・維持イベントのうち公開状態に到達・維持した割合を表示します。ADD_DRAFT_TO_PUBLISHED / DISCARD_DRAFT_ON_PUBLISHED / DELETE_* は除外し、分母が 0 件の場合は null です。",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "yesoreyeram-infinity-datasource",
+                      "version": "",
+                      "datasource": {
+                        "type": "yesoreyeram-infinity-datasource",
+                        "uid": "duckdb-query-api"
+                      },
+                      "spec": {
+                        "type": "json",
+                        "source": "url",
+                        "parser": "backend",
+                        "format": "table",
+                        "root_selector": "$",
+                        "url": "/metrics/publish-action-summary",
+                        "url_options": {
+                          "method": "GET",
+                          "params": [
+                            {
+                              "key": "from",
+                              "value": "${__timeFrom}"
+                            },
+                            {
+                              "key": "to",
+                              "value": "${__timeTo}"
+                            }
+                          ],
+                          "data": ""
+                        },
+                        "columns": [
+                          {
+                            "selector": "published_state_rate",
+                            "text": "published_state_rate",
+                            "type": "number"
+                          }
+                        ],
+                        "data": "",
+                        "filters": [],
+                        "global_query_id": ""
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "gauge",
+            "version": "12.0.0",
+            "spec": {
+              "options": {
+                "minVizHeight": 75,
+                "minVizWidth": 75,
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true,
+                "sizing": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 1,
+                  "min": 0,
+                  "max": 1,
+                  "unit": "percentunit",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.25
+                      },
+                      {
+                        "color": "green",
+                        "value": 0.5
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "Publish Action Trend",
+          "description": "日別の PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED 件数を stacked bar で表示します。ダッシュボードの time range を JST 日付でゼロ埋めします。",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "yesoreyeram-infinity-datasource",
+                      "version": "",
+                      "datasource": {
+                        "type": "yesoreyeram-infinity-datasource",
+                        "uid": "duckdb-query-api"
+                      },
+                      "spec": {
+                        "type": "json",
+                        "source": "url",
+                        "parser": "backend",
+                        "format": "table",
+                        "root_selector": "$",
+                        "url": "/metrics/publish-action-trend",
+                        "url_options": {
+                          "method": "GET",
+                          "params": [
+                            {
+                              "key": "from",
+                              "value": "${__timeFrom}"
+                            },
+                            {
+                              "key": "to",
+                              "value": "${__timeTo}"
+                            }
+                          ],
+                          "data": ""
+                        },
+                        "columns": [
+                          {
+                            "selector": "time",
+                            "text": "time",
+                            "type": "timestamp"
+                          },
+                          {
+                            "selector": "publish_from_draft_count",
+                            "text": "publish_from_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "initial_publish_count",
+                            "text": "initial_publish",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "republish_from_closed_count",
+                            "text": "republish_from_closed",
+                            "type": "number"
+                          }
+                        ],
+                        "data": "",
+                        "filters": [],
+                        "global_query_id": ""
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "12.0.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "multi",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "drawStyle": "bars",
+                    "fillOpacity": 80,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "normal"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "decimals": 0,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "id": 2,
+          "title": "API Activity",
+          "description": "API ごとの event_kind 件数。ダッシュボードの time range で絞り込み、既定は下書き操作 / 公開・更新 / 非公開・再開 / 削除の 4 カテゴリ集約を horizontal stacked bar で表示します。上部の api_activity_view で 14 種の詳細内訳に切り替えられます。",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "yesoreyeram-infinity-datasource",
+                      "version": "",
+                      "datasource": {
+                        "type": "yesoreyeram-infinity-datasource",
+                        "uid": "duckdb-query-api"
+                      },
+                      "spec": {
+                        "type": "json",
+                        "source": "url",
+                        "parser": "backend",
+                        "format": "table",
+                        "root_selector": "$",
+                        "url": "/metrics/api-activity",
+                        "url_options": {
+                          "method": "GET",
+                          "params": [
+                            {
+                              "key": "from",
+                              "value": "${__timeFrom}"
+                            },
+                            {
+                              "key": "to",
+                              "value": "${__timeTo}"
+                            }
+                          ],
+                          "data": ""
+                        },
+                        "columns": [
+                          {
+                            "selector": "api",
+                            "text": "api",
+                            "type": "string"
+                          },
+                          {
+                            "selector": "initial_draft_count",
+                            "text": "initial_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "save_draft_count",
+                            "text": "save_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "publish_from_draft_count",
+                            "text": "publish_from_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "initial_publish_count",
+                            "text": "initial_publish",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "update_published_count",
+                            "text": "update_published",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "add_draft_to_published_count",
+                            "text": "add_draft_to_published",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "discard_draft_on_published_count",
+                            "text": "discard_draft_on_published",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "unpublish_to_draft_count",
+                            "text": "unpublish_to_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "unpublish_to_closed_count",
+                            "text": "unpublish_to_closed",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "reopen_to_draft_count",
+                            "text": "reopen_to_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "republish_from_closed_count",
+                            "text": "republish_from_closed",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "delete_draft_count",
+                            "text": "delete_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "delete_published_count",
+                            "text": "delete_published",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "delete_closed_count",
+                            "text": "delete_closed",
+                            "type": "number"
+                          }
+                        ],
+                        "data": "",
+                        "filters": [],
+                        "global_query_id": ""
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "indexByName": {
+                        "api": 0,
+                        "initial_draft": 1,
+                        "save_draft": 2,
+                        "publish_from_draft": 3,
+                        "initial_publish": 4,
+                        "update_published": 5,
+                        "add_draft_to_published": 6,
+                        "discard_draft_on_published": 7,
+                        "unpublish_to_draft": 8,
+                        "unpublish_to_closed": 9,
+                        "reopen_to_draft": 10,
+                        "republish_from_closed": 11,
+                        "delete_draft": 12,
+                        "delete_published": 13,
+                        "delete_closed": 14
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "calculateField",
+                  "spec": {
+                    "options": {
+                      "alias": "draft_activity",
+                      "mode": "reduceRow",
+                      "reduce": {
+                        "include": [
+                          "initial_draft",
+                          "save_draft",
+                          "add_draft_to_published",
+                          "discard_draft_on_published"
+                        ],
+                        "reducer": "sum"
+                      },
+                      "replaceFields": false
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "calculateField",
+                  "spec": {
+                    "options": {
+                      "alias": "publish_activity",
+                      "mode": "reduceRow",
+                      "reduce": {
+                        "include": [
+                          "publish_from_draft",
+                          "initial_publish",
+                          "update_published",
+                          "republish_from_closed"
+                        ],
+                        "reducer": "sum"
+                      },
+                      "replaceFields": false
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "calculateField",
+                  "spec": {
+                    "options": {
+                      "alias": "unpublish_activity",
+                      "mode": "reduceRow",
+                      "reduce": {
+                        "include": [
+                          "unpublish_to_draft",
+                          "unpublish_to_closed",
+                          "reopen_to_draft"
+                        ],
+                        "reducer": "sum"
+                      },
+                      "replaceFields": false
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "calculateField",
+                  "spec": {
+                    "options": {
+                      "alias": "delete_activity",
+                      "mode": "reduceRow",
+                      "reduce": {
+                        "include": [
+                          "delete_draft",
+                          "delete_published",
+                          "delete_closed"
+                        ],
+                        "reducer": "sum"
+                      },
+                      "replaceFields": false
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "filterFieldsByName",
+                  "spec": {
+                    "options": {
+                      "include": {
+                        "pattern": "${api_activity_view}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "barchart",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "calcs": [
+                    "sum"
+                  ]
+                },
+                "orientation": "horizontal",
+                "showValue": "never",
+                "stacking": "normal",
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "decimals": 0,
+                  "min": 0,
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "draft_activity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "下書き操作"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "blue",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "publish_activity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "公開・更新"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "green",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "unpublish_activity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "非公開・再開"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "orange",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "delete_activity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "削除"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "red",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "initial_draft"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "初回下書き"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "semi-dark-blue",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "save_draft"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "下書き保存"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "blue",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "add_draft_to_published"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "公開中に下書き追加"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "light-blue",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "discard_draft_on_published"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "公開中の下書き破棄"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "super-light-blue",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "publish_from_draft"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "下書きから公開"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "semi-dark-green",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "initial_publish"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "初回公開"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "green",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "update_published"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "公開中更新"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "light-green",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "republish_from_closed"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "非公開から再公開"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "super-light-green",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "unpublish_to_draft"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "公開から下書き"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "semi-dark-orange",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "unpublish_to_closed"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "公開から非公開"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "orange",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "reopen_to_draft"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "非公開から下書き"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "light-orange",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "delete_draft"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "下書き削除"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "semi-dark-red",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "delete_published"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "公開削除"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "red",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "delete_closed"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "非公開削除"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "light-red",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3,
+          "title": "Top Updated Contents",
+          "description": "event_type が new または edit で content_id があるイベントを対象に、ダッシュボードの time range 内で更新回数が多いコンテンツ上位 20 件を表示します。updated_count は API の count、last_event_at は最終イベント時刻です。",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "yesoreyeram-infinity-datasource",
+                      "version": "",
+                      "datasource": {
+                        "type": "yesoreyeram-infinity-datasource",
+                        "uid": "duckdb-query-api"
+                      },
+                      "spec": {
+                        "type": "json",
+                        "source": "url",
+                        "parser": "backend",
+                        "format": "table",
+                        "root_selector": "$",
+                        "url": "/metrics/top-updated-contents",
+                        "url_options": {
+                          "method": "GET",
+                          "params": [
+                            {
+                              "key": "from",
+                              "value": "${__timeFrom}"
+                            },
+                            {
+                              "key": "to",
+                              "value": "${__timeTo}"
+                            },
+                            {
+                              "key": "limit",
+                              "value": "20"
+                            }
+                          ],
+                          "data": ""
+                        },
+                        "columns": [
+                          {
+                            "selector": "api",
+                            "text": "api",
+                            "type": "string"
+                          },
+                          {
+                            "selector": "content_id",
+                            "text": "content_id",
+                            "type": "string"
+                          },
+                          {
+                            "selector": "count",
+                            "text": "updated_count",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "last_event_at",
+                            "text": "last_event_at",
+                            "type": "timestamp"
+                          }
+                        ],
+                        "data": "",
+                        "filters": [],
+                        "global_query_id": ""
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "indexByName": {
+                        "api": 0,
+                        "content_id": 1,
+                        "updated_count": 2,
+                        "last_event_at": 3
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "showHeader": true
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "last_event_at"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsLocal"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "Average Time to Publish by API",
+          "description": "API ごとに、コンテンツ作成（publishValue.createdAt）から公開到達（publishValue.publishedAt）までの平均所要時間を表示します。PUBLISH_FROM_DRAFT / INITIAL_PUBLISH / REPUBLISH_FROM_CLOSED を対象にダッシュボードの time range で絞り込み、publish_duration_unit で日数 / 時間を切り替えます。",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "yesoreyeram-infinity-datasource",
+                      "version": "",
+                      "datasource": {
+                        "type": "yesoreyeram-infinity-datasource",
+                        "uid": "duckdb-query-api"
+                      },
+                      "spec": {
+                        "type": "json",
+                        "source": "url",
+                        "parser": "backend",
+                        "format": "table",
+                        "root_selector": "$",
+                        "url": "/metrics/average-time-to-publish-by-api",
+                        "url_options": {
+                          "method": "GET",
+                          "params": [
+                            {
+                              "key": "from",
+                              "value": "${__timeFrom}"
+                            },
+                            {
+                              "key": "to",
+                              "value": "${__timeTo}"
+                            },
+                            {
+                              "key": "unit",
+                              "value": "${publish_duration_unit}"
+                            }
+                          ],
+                          "data": ""
+                        },
+                        "columns": [
+                          {
+                            "selector": "api",
+                            "text": "api",
+                            "type": "string"
+                          },
+                          {
+                            "selector": "avg_days",
+                            "text": "avg_days",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "avg_hours",
+                            "text": "avg_hours",
+                            "type": "number"
+                          }
+                        ],
+                        "data": "",
+                        "filters": [],
+                        "global_query_id": ""
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "filterFieldsByName",
+                  "spec": {
+                    "options": {
+                      "include": {
+                        "pattern": "^(api|avg_${publish_duration_unit})$"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "barchart",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": false
+                },
+                "orientation": "horizontal",
+                "showValue": "always",
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "avg_days"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "d"
+                      },
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "green",
+                              "value": null
+                            },
+                            {
+                              "color": "yellow",
+                              "value": 1
+                            },
+                            {
+                              "color": "red",
+                              "value": 3
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "avg_hours"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "h"
+                      },
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "green",
+                              "value": null
+                            },
+                            {
+                              "color": "yellow",
+                              "value": 24
+                            },
+                            {
+                              "color": "red",
+                              "value": 72
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Average Draft to Publish by API",
+          "description": "API ごとに、下書き作成（draftValue.createdAt）から下書き経由公開（publishValue.publishedAt）までの平均所要時間を表示します。同一 api / content_id の INITIAL_DRAFT と PUBLISH_FROM_DRAFT を結合します。期間フィルタは PUBLISH_FROM_DRAFT 側の dt に適用し、ダッシュボードの time range で絞り込みます。",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "yesoreyeram-infinity-datasource",
+                      "version": "",
+                      "datasource": {
+                        "type": "yesoreyeram-infinity-datasource",
+                        "uid": "duckdb-query-api"
+                      },
+                      "spec": {
+                        "type": "json",
+                        "source": "url",
+                        "parser": "backend",
+                        "format": "table",
+                        "root_selector": "$",
+                        "url": "/metrics/average-draft-to-publish-by-api",
+                        "url_options": {
+                          "method": "GET",
+                          "params": [
+                            {
+                              "key": "from",
+                              "value": "${__timeFrom}"
+                            },
+                            {
+                              "key": "to",
+                              "value": "${__timeTo}"
+                            },
+                            {
+                              "key": "unit",
+                              "value": "${publish_duration_unit}"
+                            }
+                          ],
+                          "data": ""
+                        },
+                        "columns": [
+                          {
+                            "selector": "api",
+                            "text": "api",
+                            "type": "string"
+                          },
+                          {
+                            "selector": "avg_days",
+                            "text": "avg_days",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "avg_hours",
+                            "text": "avg_hours",
+                            "type": "number"
+                          }
+                        ],
+                        "data": "",
+                        "filters": [],
+                        "global_query_id": ""
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "filterFieldsByName",
+                  "spec": {
+                    "options": {
+                      "include": {
+                        "pattern": "^(api|avg_${publish_duration_unit})$"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "barchart",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": false
+                },
+                "orientation": "horizontal",
+                "showValue": "always",
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "avg_days"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "d"
+                      },
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "green",
+                              "value": null
+                            },
+                            {
+                              "color": "yellow",
+                              "value": 1
+                            },
+                            {
+                              "color": "red",
+                              "value": 3
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "avg_hours"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "h"
+                      },
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "green",
+                              "value": null
+                            },
+                            {
+                              "color": "yellow",
+                              "value": 24
+                            },
+                            {
+                              "color": "red",
+                              "value": 72
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Operation Category Breakdown",
+          "description": "ダッシュボードの time range 内の全 API を合算し、event_kind を 4 カテゴリ（下書き操作 / 公開・更新 / 非公開・再開 / 削除）に集約した操作構成比を円グラフで表示します。カテゴリ定義は API Activity と共通です。",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "yesoreyeram-infinity-datasource",
+                      "version": "",
+                      "datasource": {
+                        "type": "yesoreyeram-infinity-datasource",
+                        "uid": "duckdb-query-api"
+                      },
+                      "spec": {
+                        "type": "json",
+                        "source": "url",
+                        "parser": "backend",
+                        "format": "table",
+                        "root_selector": "$",
+                        "url": "/metrics/api-activity",
+                        "url_options": {
+                          "method": "GET",
+                          "params": [
+                            {
+                              "key": "from",
+                              "value": "${__timeFrom}"
+                            },
+                            {
+                              "key": "to",
+                              "value": "${__timeTo}"
+                            }
+                          ],
+                          "data": ""
+                        },
+                        "columns": [
+                          {
+                            "selector": "api",
+                            "text": "api",
+                            "type": "string"
+                          },
+                          {
+                            "selector": "initial_draft_count",
+                            "text": "initial_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "save_draft_count",
+                            "text": "save_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "publish_from_draft_count",
+                            "text": "publish_from_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "initial_publish_count",
+                            "text": "initial_publish",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "update_published_count",
+                            "text": "update_published",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "add_draft_to_published_count",
+                            "text": "add_draft_to_published",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "discard_draft_on_published_count",
+                            "text": "discard_draft_on_published",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "unpublish_to_draft_count",
+                            "text": "unpublish_to_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "unpublish_to_closed_count",
+                            "text": "unpublish_to_closed",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "reopen_to_draft_count",
+                            "text": "reopen_to_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "republish_from_closed_count",
+                            "text": "republish_from_closed",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "delete_draft_count",
+                            "text": "delete_draft",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "delete_published_count",
+                            "text": "delete_published",
+                            "type": "number"
+                          },
+                          {
+                            "selector": "delete_closed_count",
+                            "text": "delete_closed",
+                            "type": "number"
+                          }
+                        ],
+                        "data": "",
+                        "filters": [],
+                        "global_query_id": ""
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "indexByName": {
+                        "api": 0,
+                        "initial_draft": 1,
+                        "save_draft": 2,
+                        "publish_from_draft": 3,
+                        "initial_publish": 4,
+                        "update_published": 5,
+                        "add_draft_to_published": 6,
+                        "discard_draft_on_published": 7,
+                        "unpublish_to_draft": 8,
+                        "unpublish_to_closed": 9,
+                        "reopen_to_draft": 10,
+                        "republish_from_closed": 11,
+                        "delete_draft": 12,
+                        "delete_published": 13,
+                        "delete_closed": 14
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "calculateField",
+                  "spec": {
+                    "options": {
+                      "alias": "draft_activity",
+                      "mode": "reduceRow",
+                      "reduce": {
+                        "include": [
+                          "initial_draft",
+                          "save_draft",
+                          "add_draft_to_published",
+                          "discard_draft_on_published"
+                        ],
+                        "reducer": "sum"
+                      },
+                      "replaceFields": false
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "calculateField",
+                  "spec": {
+                    "options": {
+                      "alias": "publish_activity",
+                      "mode": "reduceRow",
+                      "reduce": {
+                        "include": [
+                          "publish_from_draft",
+                          "initial_publish",
+                          "update_published",
+                          "republish_from_closed"
+                        ],
+                        "reducer": "sum"
+                      },
+                      "replaceFields": false
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "calculateField",
+                  "spec": {
+                    "options": {
+                      "alias": "unpublish_activity",
+                      "mode": "reduceRow",
+                      "reduce": {
+                        "include": [
+                          "unpublish_to_draft",
+                          "unpublish_to_closed",
+                          "reopen_to_draft"
+                        ],
+                        "reducer": "sum"
+                      },
+                      "replaceFields": false
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "calculateField",
+                  "spec": {
+                    "options": {
+                      "alias": "delete_activity",
+                      "mode": "reduceRow",
+                      "reduce": {
+                        "include": [
+                          "delete_draft",
+                          "delete_published",
+                          "delete_closed"
+                        ],
+                        "reducer": "sum"
+                      },
+                      "replaceFields": false
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "filterFieldsByName",
+                  "spec": {
+                    "options": {
+                      "include": {
+                        "pattern": "^(draft_activity|publish_activity|unpublish_activity|delete_activity)$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "mode": "reduceFields",
+                      "reducers": [
+                        "sum"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "piechart",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "pie",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "decimals": 0,
+                  "min": 0,
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "draft_activity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "下書き操作"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "blue",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "publish_activity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "公開・更新"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "green",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "unpublish_activity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "非公開・再開"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "orange",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "delete_activity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "削除"
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "red",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "GridLayout",
+      "spec": {
+        "items": [
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 12,
+              "element": {
+                "kind": "Panel",
+                "name": "panel-2"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 12,
+              "width": 24,
+              "height": 8,
+              "element": {
+                "kind": "Panel",
+                "name": "panel-8"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 20,
+              "width": 12,
+              "height": 5,
+              "element": {
+                "kind": "Panel",
+                "name": "panel-6"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 12,
+              "y": 20,
+              "width": 12,
+              "height": 5,
+              "element": {
+                "kind": "Panel",
+                "name": "panel-7"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 25,
+              "width": 12,
+              "height": 9,
+              "element": {
+                "kind": "Panel",
+                "name": "panel-9"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 12,
+              "y": 25,
+              "width": 12,
+              "height": 9,
+              "element": {
+                "kind": "Panel",
+                "name": "panel-4"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 34,
+              "width": 12,
+              "height": 9,
+              "element": {
+                "kind": "Panel",
+                "name": "panel-3"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 12,
+              "y": 34,
+              "width": 12,
+              "height": 9,
+              "element": {
+                "kind": "Panel",
+                "name": "panel-5"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 43,
+              "width": 24,
+              "height": 9,
+              "element": {
+                "kind": "Panel",
+                "name": "panel-1"
+              }
+            }
+          }
+        ]
+      }
+    }
   },
-  "time": {
-    "from": "now-365d",
-    "to": "now"
-  },
-  "timepicker": {},
-  "timezone": "Asia/Tokyo",
-  "title": "microCMS Content Ops Analytics",
-  "uid": "microcms-content-ops",
-  "version": 11
+  "status": {}
 }
