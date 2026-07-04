@@ -219,6 +219,23 @@ MCP_ALLOWED_ORIGINS=http://localhost:8000,http://localhost:6274
 `duckdb-query-api` を再起動後、MCP client には Streamable HTTP endpoint として `http://localhost:8000/mcp` を設定します。
 HTTP で直接確認する場合は、`Authorization` と `Origin` header を付けて `initialize` を送信します。
 MCP Inspector UI で確認する場合は `Connection Type: Direct` を選び、custom header には `Authorization` だけを設定します。
+Cursor で確認する場合は、ローカルの `.cursor/mcp.json` に次のように設定します。
+`Authorization` の値は `.env` の `MCP_BEARER_TOKEN` に置き換えてください。
+実 token を含む `.cursor/mcp.json` は commit しないでください。
+
+```json
+{
+  "mcpServers": {
+    "microcms-content-ops": {
+      "url": "http://localhost:8000/mcp",
+      "headers": {
+        "Authorization": "Bearer <value-of-MCP_BEARER_TOKEN>",
+        "Origin": "http://localhost:8000"
+      }
+    }
+  }
+}
+```
 
 ```bash
 curl -i http://localhost:8000/mcp \
