@@ -424,7 +424,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = response_json_or_sse(response.into_body()).await;
         let structured = &body["result"]["structuredContent"];
-        assert!(structured.as_array().unwrap().iter().any(|row| {
+        let rows = structured["rows"].as_array().unwrap();
+        assert!(rows.iter().any(|row| {
             row["time"] == format_partition_time(&event_date.to_string()) && row["value"] == 10
         }));
         assert_eq!(body["result"]["content"][0]["text"], structured.to_string());

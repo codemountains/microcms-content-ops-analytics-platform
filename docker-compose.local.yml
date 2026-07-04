@@ -36,6 +36,9 @@ services:
       DUCKDB_S3_URL_STYLE: path
       DUCKDB_S3_USE_SSL: "false"
       PORT: 8000
+      MCP_ENABLED: ${MCP_ENABLED:-false}
+      MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:-}
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
     ports:
       - "8000:8000"
 

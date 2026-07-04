@@ -213,11 +213,12 @@ MCP endpoint をローカルで確認する場合は、`.env` で明示的に有
 ```dotenv
 MCP_ENABLED=true
 MCP_BEARER_TOKEN=local-mcp-token
-MCP_ALLOWED_ORIGINS=http://localhost:8000
+MCP_ALLOWED_ORIGINS=http://localhost:8000,http://localhost:6274
 ```
 
 `duckdb-query-api` を再起動後、MCP client には Streamable HTTP endpoint として `http://localhost:8000/mcp` を設定します。
 HTTP で直接確認する場合は、`Authorization` と `Origin` header を付けて `initialize` を送信します。
+MCP Inspector UI で確認する場合は `Connection Type: Direct` を選び、custom header には `Authorization` だけを設定します。
 
 ```bash
 curl -i http://localhost:8000/mcp \

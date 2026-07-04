@@ -63,6 +63,11 @@ struct PublishDurationParams {
     unit: Option<String>,
 }
 
+#[derive(Serialize)]
+struct MetricRows<T> {
+    rows: T,
+}
+
 impl MetricsMcpServer {
     fn new(state: AppState) -> Self {
         Self {
@@ -327,7 +332,7 @@ fn publish_duration_unit(unit: Option<&str>) -> Result<PublishDurationUnit, Erro
 }
 
 fn structured<T: Serialize>(value: T) -> Result<CallToolResult, ErrorData> {
-    serde_json::to_value(value)
+    serde_json::to_value(MetricRows { rows: value })
         .map(CallToolResult::structured)
         .map_err(|error| ErrorData::internal_error(error.to_string(), None))
 }

@@ -469,7 +469,7 @@ v1 で公開する tool は次の 7 つとする。
 | `average_draft_to_publish_by_api` | `from`, `to`, `unit` | `/metrics/average-draft-to-publish-by-api` |
 
 Arguments は対応する REST API の query parameter と同じ型・既定値・validation を使う。
-tool result は `structuredContent` に REST API と同じ JSON 配列を返し、互換性のため `content[0].text` に同じ JSON 文字列を返す。
+tool result は `structuredContent.rows` に REST API と同じ JSON 配列を返し、互換性のため `content[0].text` に `structuredContent` 全体と同じ JSON 文字列を返す。
 MCP でも任意 SQL tool は提供しない。
 
 Security:
