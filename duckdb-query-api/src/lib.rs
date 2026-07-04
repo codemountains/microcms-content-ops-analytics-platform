@@ -580,6 +580,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mcp_initialize_exposes_session_header_to_browser_clients() {
+        let tempdir = tempdir().unwrap();
+        let app = crate::try_app(test_mcp_config(
+            format!("{}/missing/**/*.parquet", tempdir.path().display()),
+            tempdir
+                .path()
+                .join("duckdb_extensions")
+                .to_string_lossy()
+                .into(),
+        ))
+        .unwrap();
+
+        let response = app
+            .oneshot(authorized_mcp_request(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "duckdb-query-api-test",
+                        "version": "0.1.0"
+                    }
+                }
+            })))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.headers().contains_key("mcp-session-id"));
+        assert!(
+            response
+                .headers()
+                .get(header::ACCESS_CONTROL_EXPOSE_HEADERS)
+                .and_then(|value| value.to_str().ok())
+                .is_some_and(|value| value
+                    .split(',')
+                    .any(|header| header.trim().eq_ignore_ascii_case("mcp-session-id")))
+        );
+    }
+
+    #[tokio::test]
     async fn mcp_tools_list_exposes_fixed_metric_tools() {
         let tempdir = tempdir().unwrap();
         let app = crate::try_app(test_mcp_config(

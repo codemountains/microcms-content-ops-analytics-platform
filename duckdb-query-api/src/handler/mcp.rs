@@ -313,6 +313,10 @@ fn apply_cors_headers(headers: &mut HeaderMap, origin: &str) {
         ),
     );
     headers.insert(
+        header::ACCESS_CONTROL_EXPOSE_HEADERS,
+        HeaderValue::from_static("mcp-session-id"),
+    );
+    headers.insert(
         header::ACCESS_CONTROL_MAX_AGE,
         HeaderValue::from_static("600"),
     );
