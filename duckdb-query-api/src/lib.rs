@@ -37,6 +37,9 @@ mod tests {
     };
     use crate::storage::{DuckDbEngine, sql_string_literal};
 
+    const SMOKE_BLOG_LIFECYCLE_CONTENT_ULID: &str = "01J1DVG0000000000000000001";
+    const SMOKE_BLOG_DIRECT_CONTENT_ULID: &str = "01J1DVG0000000000000000002";
+
     #[tokio::test]
     async fn queries_refreshed_metrics_from_local_hive_partitioned_parquet() {
         let tempdir = tempdir().unwrap();
@@ -80,7 +83,7 @@ mod tests {
                     TIMESTAMP '{event_date} 12:00:00' AS received_at,
                     'example-service' AS service,
                     'blogs' AS api,
-                    'content-1' AS content_id,
+                    '{SMOKE_BLOG_LIFECYCLE_CONTENT_ULID}' AS content_id,
                     'PUBLISH_FROM_DRAFT' AS event_kind,
                     'edit' AS event_type,
                     'DRAFT' AS old_status,
@@ -96,7 +99,7 @@ mod tests {
                     TIMESTAMP '{event_date} 11:00:00',
                     'example-service',
                     'blogs',
-                    'content-1',
+                    '{SMOKE_BLOG_LIFECYCLE_CONTENT_ULID}',
                     'INITIAL_DRAFT',
                     'new',
                     NULL,
@@ -112,7 +115,7 @@ mod tests {
                     TIMESTAMP '{event_date} 13:00:00',
                     'example-service',
                     'blogs',
-                    'content-1',
+                    '{SMOKE_BLOG_LIFECYCLE_CONTENT_ULID}',
                     'UPDATE_PUBLISHED',
                     'edit',
                     'PUBLISH',
@@ -208,7 +211,7 @@ mod tests {
                     TIMESTAMP '{event_date} 14:00:00',
                     'example-service',
                     'blogs',
-                    'content-2',
+                    '{SMOKE_BLOG_DIRECT_CONTENT_ULID}',
                     'INITIAL_PUBLISH',
                     'new',
                     NULL,
@@ -323,7 +326,10 @@ mod tests {
 
         assert_eq!(top_contents.len(), 2);
         assert_eq!(top_contents[0].api.as_deref(), Some("blogs"));
-        assert_eq!(top_contents[0].content_id.as_deref(), Some("content-1"));
+        assert_eq!(
+            top_contents[0].content_id.as_deref(),
+            Some(SMOKE_BLOG_LIFECYCLE_CONTENT_ULID)
+        );
         assert_eq!(top_contents[0].count, 3);
         let expected_last_event_at = format!("{event_date}T13:00:00Z");
         assert_eq!(
