@@ -124,10 +124,7 @@ if [[ -z "$GRAFANA_DASHBOARD_UID" ]]; then
   fail "GRAFANA_DASHBOARD_UID must not be empty"
 fi
 
-GRAFANA_DASHBOARD_NAMESPACE="${GRAFANA_DASHBOARD_NAMESPACE:-default}"
-if [[ -z "$GRAFANA_DASHBOARD_NAMESPACE" ]]; then
-  fail "GRAFANA_DASHBOARD_NAMESPACE must not be empty"
-fi
+require_env GRAFANA_DASHBOARD_NAMESPACE
 
 QUERY_API_URL="${QUERY_API_URL:-}"
 if [[ -z "$QUERY_API_URL" ]]; then
@@ -204,6 +201,7 @@ esac
 
 dashboard_folder_uid="${GRAFANA_FOLDER_UID:-}"
 dashboard_resource_version=""
+dashboard_collection_path="/apis/dashboard.grafana.app/v2/namespaces/$GRAFANA_DASHBOARD_NAMESPACE/dashboards"
 dashboard_api_path="/apis/dashboard.grafana.app/v2/namespaces/$GRAFANA_DASHBOARD_NAMESPACE/dashboards/$GRAFANA_DASHBOARD_UID"
 dashboard_get_body="$TMP_DIR/dashboard-get.json"
 dashboard_get_status="$(api_request GET "$dashboard_api_path" "$dashboard_get_body")"
@@ -249,6 +247,15 @@ jq \
   ' "$DASHBOARD" >"$dashboard_payload"
 
 dashboard_body="$TMP_DIR/dashboard-response.json"
-dashboard_status="$(api_request PUT "$dashboard_api_path" "$dashboard_body" "$dashboard_payload")"
-expect_success "$dashboard_status" "$dashboard_api_path" "$dashboard_body"
-echo "Upserted Grafana dashboard $GRAFANA_DASHBOARD_UID via dashboard.grafana.app/v2."
+case "$dashboard_get_status" in
+  2*)
+    dashboard_status="$(api_request PUT "$dashboard_api_path" "$dashboard_body" "$dashboard_payload")"
+    expect_success "$dashboard_status" "$dashboard_api_path" "$dashboard_body"
+    echo "Updated Grafana dashboard $GRAFANA_DASHBOARD_UID via dashboard.grafana.app/v2."
+    ;;
+  404)
+    dashboard_status="$(api_request POST "$dashboard_collection_path" "$dashboard_body" "$dashboard_payload")"
+    expect_success "$dashboard_status" "$dashboard_collection_path" "$dashboard_body"
+    echo "Created Grafana dashboard $GRAFANA_DASHBOARD_UID via dashboard.grafana.app/v2."
+    ;;
+esac

@@ -901,7 +901,8 @@ Grafana Cloud provisioning は次の contract とする。
 - 既存 Grafana Cloud stack の URL と service account token を入力として使う。
 - `QUERY_API_URL` が未指定の場合は `infra/aws` の OpenTofu output `query_api_url` を使う。
 - datasource uid は `duckdb-query-api`、type は `yesoreyeram-infinity-datasource`、`access` は `proxy` とする。
-- dashboard uid は既定で `microcms-content-ops`、namespace は既定で `default` とし、`grafana/dashboards/microcms-content-ops-analytics.json` を `PUT /apis/dashboard.grafana.app/v2/namespaces/:namespace/dashboards/:uid` で冪等に upsert する。
+- dashboard uid は既定で `microcms-content-ops` とし、`GRAFANA_DASHBOARD_NAMESPACE` で指定した namespace に `grafana/dashboards/microcms-content-ops-analytics.json` を冪等に upsert する。Grafana Cloud の namespace は `stacks-<stack_id>` とする。
+- dashboard が存在しない場合は `POST /apis/dashboard.grafana.app/v2/namespaces/:namespace/dashboards` で作成し、存在する場合は `PUT /apis/dashboard.grafana.app/v2/namespaces/:namespace/dashboards/:uid` で更新する。
 - `GRAFANA_FOLDER_UID` を指定した場合は `metadata.annotations["grafana.app/folder"]` として設定し、未指定で既存 dashboard がある場合は既存 folder annotation を維持する。
 - `yesoreyeram-infinity-datasource` と `tim012432-calendarheatmap-panel` は Grafana Cloud stack に事前インストール済みであることを前提にする。未インストール時は明確に失敗し、明示 opt-out の場合だけ確認を skip できる。
 

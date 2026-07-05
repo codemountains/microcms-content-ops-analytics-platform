@@ -132,12 +132,13 @@ curl "$QUERY_API_URL/metrics/calendar-heatmap"
 ## 6. Grafana Cloud に dashboard を反映する
 
 Grafana Cloud stack が作成済みの場合、AWS の `query_api_url` を datasource URL として反映し、既存 dashboard JSON を upsert できます。
-dashboard JSON は Grafana v2 resource schema（`apiVersion: dashboard.grafana.app/v2`）で管理し、Cloud 反映は `dashboard.grafana.app/v2` API の `PUT` で行います。
+dashboard JSON は Grafana v2 resource schema（`apiVersion: dashboard.grafana.app/v2`）で管理し、Cloud 反映は `dashboard.grafana.app/v2` API の `POST` / `PUT` で行います。
 ローカル Docker Compose 向けの `grafana/provisioning/` はそのまま維持します。
 
 ```bash
 export GRAFANA_STACK_URL="https://<stack>.grafana.net"
 export GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN="<service-account-token>"
+export GRAFANA_DASHBOARD_NAMESPACE="stacks-<stack_id>"
 just deploy-grafana-cloud
 ```
 
@@ -157,18 +158,25 @@ QUERY_API_URL="https://query-api.example.com" just deploy-grafana-cloud
 | datasource type | `yesoreyeram-infinity-datasource` |
 | datasource URL | `QUERY_API_URL` または OpenTofu output `query_api_url` |
 | dashboard uid | `microcms-content-ops` |
-| dashboard API | `PUT /apis/dashboard.grafana.app/v2/namespaces/:namespace/dashboards/:uid` |
+| dashboard API | create: `POST /apis/dashboard.grafana.app/v2/namespaces/:namespace/dashboards` / update: `PUT /apis/dashboard.grafana.app/v2/namespaces/:namespace/dashboards/:uid` |
 | dashboard JSON | `grafana/dashboards/microcms-content-ops-analytics.json` |
+
+追加の必須設定:
+
+| 変数 | 用途 |
+| --- | --- |
+| `GRAFANA_DASHBOARD_NAMESPACE` | dashboard resource API の namespace を指定。Grafana Cloud は `stacks-<stack_id>` |
 
 任意設定:
 
 | 変数 | 用途 |
 | --- | --- |
 | `GRAFANA_DASHBOARD_UID` | dashboard uid を既定値 `microcms-content-ops` から変更 |
-| `GRAFANA_DASHBOARD_NAMESPACE` | dashboard resource API の namespace を既定値 `default` から変更 |
 | `GRAFANA_FOLDER_UID` | 配置先 folder uid を指定 |
 | `GRAFANA_SKIP_PLUGIN_CHECK=1` | Infinity datasource / Calendar Heatmap plugin 確認を明示的に skip |
 
+`GRAFANA_DASHBOARD_NAMESPACE` は必須です。
+Grafana Cloud の `stack_id` は Grafana Cloud portal の stack details、または対象 Cloud instance の `/swagger` で確認できます。
 `GRAFANA_FOLDER_UID` を指定しない場合、既存 dashboard があれば `metadata.annotations["grafana.app/folder"]` を維持します。
 Grafana 13 UI で provisioned dashboard を編集して保存しても、repository の provisioning source には自動反映されません。
 変更を取り込む場合は UI から V2 Resource JSON として export し、`scripts/validate-grafana-dashboard.sh` を通してから `grafana/dashboards/microcms-content-ops-analytics.json` を更新します。

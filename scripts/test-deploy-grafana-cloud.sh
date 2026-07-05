@@ -132,7 +132,7 @@ case "$path" in
       body='{"message":"Data source not found"}'
     fi
     ;;
-  /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/microcms-content-ops)
+  /apis/dashboard.grafana.app/v2/namespaces/stacks-123/dashboards/microcms-content-ops)
     if [[ "$method" = "PUT" && -n "$data_file" ]]; then
       cp "$data_file" "$FAKE_CURL_TMP/dashboard.json"
       body='{"kind":"Dashboard","apiVersion":"dashboard.grafana.app/v2","metadata":{"name":"microcms-content-ops"}}'
@@ -141,6 +141,15 @@ case "$path" in
     else
       status=404
       body='{"message":"Dashboard not found"}'
+    fi
+    ;;
+  /apis/dashboard.grafana.app/v2/namespaces/stacks-123/dashboards)
+    if [[ "$method" != "POST" ]]; then
+      status=405
+      body='{"message":"unexpected method"}'
+    elif [[ -n "$data_file" ]]; then
+      cp "$data_file" "$FAKE_CURL_TMP/dashboard-create.json"
+      body='{"kind":"Dashboard","apiVersion":"dashboard.grafana.app/v2","metadata":{"name":"microcms-content-ops"}}'
     fi
     ;;
   /api/datasources)
@@ -211,10 +220,26 @@ test_missing_required_env() {
   assert_contains "$out" "GRAFANA_STACK_URL is required"
 }
 
+test_missing_dashboard_namespace() {
+  local out="$TMP_DIR/missing-namespace.out"
+
+  if run_with_fakes "datasource-missing" env \
+    GRAFANA_STACK_URL="https://example.grafana.net" \
+    GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN="secret-token" \
+    QUERY_API_URL="https://query.example.com" \
+    "$SCRIPT" >"$out" 2>&1; then
+    echo "expected missing namespace validation to fail" >&2
+    exit 1
+  fi
+
+  assert_contains "$out" "GRAFANA_DASHBOARD_NAMESPACE is required"
+}
+
 test_create_datasource_and_dashboard() {
   run_with_fakes "datasource-missing" env \
     GRAFANA_STACK_URL="https://example.grafana.net/" \
     GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN="secret-token" \
+    GRAFANA_DASHBOARD_NAMESPACE="stacks-123" \
     GRAFANA_FOLDER_UID="ops" \
     "$SCRIPT"
 
@@ -222,13 +247,14 @@ test_create_datasource_and_dashboard() {
   assert_contains "$FAKE_CURL_LOG" "GET /api/plugins/yesoreyeram-infinity-datasource/settings"
   assert_contains "$FAKE_CURL_LOG" "GET /api/datasources/uid/duckdb-query-api"
   assert_contains "$FAKE_CURL_LOG" "POST /api/datasources"
-  assert_contains "$FAKE_CURL_LOG" "PUT /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/microcms-content-ops"
+  assert_contains "$FAKE_CURL_LOG" "GET /apis/dashboard.grafana.app/v2/namespaces/stacks-123/dashboards/microcms-content-ops"
+  assert_contains "$FAKE_CURL_LOG" "POST /apis/dashboard.grafana.app/v2/namespaces/stacks-123/dashboards"
   assert_not_contains "$FAKE_CURL_LOG" "secret-token"
 
   assert_json "$FAKE_CURL_TMP/datasource-create.json" \
     '.uid == "duckdb-query-api" and .type == "yesoreyeram-infinity-datasource" and .access == "proxy" and .url == "http://alb.example.local" and .isDefault == false' \
     "datasource create payload did not match"
-  assert_json "$FAKE_CURL_TMP/dashboard.json" \
+  assert_json "$FAKE_CURL_TMP/dashboard-create.json" \
     '.apiVersion == "dashboard.grafana.app/v2" and .kind == "Dashboard" and .metadata.name == "microcms-content-ops" and .metadata.annotations["grafana.app/folder"] == "ops"' \
     "dashboard payload did not match"
 }
@@ -237,6 +263,7 @@ test_update_existing_datasource_with_explicit_query_url() {
   run_with_fakes "datasource-existing" env \
     GRAFANA_STACK_URL="https://example.grafana.net" \
     GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN="secret-token" \
+    GRAFANA_DASHBOARD_NAMESPACE="stacks-123" \
     QUERY_API_URL="https://query.example.com" \
     "$SCRIPT"
 
@@ -253,6 +280,7 @@ test_update_preserves_existing_default_datasource() {
   run_with_fakes "datasource-existing-default" env \
     GRAFANA_STACK_URL="https://example.grafana.net" \
     GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN="secret-token" \
+    GRAFANA_DASHBOARD_NAMESPACE="stacks-123" \
     QUERY_API_URL="https://query.example.com" \
     "$SCRIPT"
 
@@ -267,6 +295,7 @@ test_plugin_missing_can_be_skipped() {
   if run_with_fakes "plugin-missing" env \
     GRAFANA_STACK_URL="https://example.grafana.net" \
     GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN="secret-token" \
+    GRAFANA_DASHBOARD_NAMESPACE="stacks-123" \
     QUERY_API_URL="https://query.example.com" \
     "$SCRIPT" >"$out" 2>&1; then
     echo "expected plugin check failure" >&2
@@ -277,13 +306,15 @@ test_plugin_missing_can_be_skipped() {
   run_with_fakes "plugin-missing" env \
     GRAFANA_STACK_URL="https://example.grafana.net" \
     GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN="secret-token" \
+    GRAFANA_DASHBOARD_NAMESPACE="stacks-123" \
     QUERY_API_URL="https://query.example.com" \
     GRAFANA_SKIP_PLUGIN_CHECK=1 \
     "$SCRIPT"
-  assert_contains "$FAKE_CURL_LOG" "PUT /apis/dashboard.grafana.app/v2/namespaces/default/dashboards/microcms-content-ops"
+  assert_contains "$FAKE_CURL_LOG" "POST /apis/dashboard.grafana.app/v2/namespaces/stacks-123/dashboards"
 }
 
 test_missing_required_env
+test_missing_dashboard_namespace
 test_create_datasource_and_dashboard
 test_update_existing_datasource_with_explicit_query_url
 test_update_preserves_existing_default_datasource

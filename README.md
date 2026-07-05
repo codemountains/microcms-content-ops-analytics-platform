@@ -241,7 +241,7 @@ AWS 認証情報はローカルの credential chain を利用します。
 | `GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN` | yes | なし | datasource / dashboard を書き込める service account token |
 | `QUERY_API_URL` | no | OpenTofu output `query_api_url` | datasource に設定する DuckDB Query API URL |
 | `GRAFANA_DASHBOARD_UID` | no | `microcms-content-ops` | upsert する dashboard uid |
-| `GRAFANA_DASHBOARD_NAMESPACE` | no | `default` | `dashboard.grafana.app/v2` API の namespace |
+| `GRAFANA_DASHBOARD_NAMESPACE` | yes | なし | `dashboard.grafana.app/v2` API の namespace。Grafana Cloud は `stacks-<stack_id>` |
 | `GRAFANA_FOLDER_UID` | no | なし | dashboard 配置先 folder uid |
 | `GRAFANA_SKIP_PLUGIN_CHECK` | no | `0` | `1` の場合だけ Grafana plugin 確認を skip |
 
