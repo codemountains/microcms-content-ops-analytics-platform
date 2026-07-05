@@ -172,6 +172,8 @@ Calendar Heatmap には [`tim012432-calendarheatmap-panel`](https://grafana.com/
 Calendar Heatmap の日付バケットは S3 パーティション `dt` と同じ JST カレンダー日です。
 Grafana 自体には分析対象データを保存しません。
 ローカル実行では Docker Compose の file provisioning を使い、AWS デプロイ後は既存 Grafana Cloud stack へ datasource と dashboard を反映できます。
+dashboard JSON は Grafana v2 resource schema（`apiVersion: dashboard.grafana.app/v2`、`spec.elements` / `spec.layout`）を source of truth とします。
+Grafana 13 UI で編集した内容を取り込む場合は V2 Resource JSON として export し、`scripts/validate-grafana-dashboard.sh` で panel / query / variable の欠落がないことを確認してから repository の JSON を更新してください。
 
 ```text
 Grafana = 可視化
@@ -239,6 +241,7 @@ AWS 認証情報はローカルの credential chain を利用します。
 | `GRAFANA_STACK_SERVICE_ACCOUNT_TOKEN` | yes | なし | datasource / dashboard を書き込める service account token |
 | `QUERY_API_URL` | no | OpenTofu output `query_api_url` | datasource に設定する DuckDB Query API URL |
 | `GRAFANA_DASHBOARD_UID` | no | `microcms-content-ops` | upsert する dashboard uid |
+| `GRAFANA_DASHBOARD_NAMESPACE` | yes | なし | `dashboard.grafana.app/v2` API の namespace。Grafana Cloud は `stacks-<stack_id>` |
 | `GRAFANA_FOLDER_UID` | no | なし | dashboard 配置先 folder uid |
 | `GRAFANA_SKIP_PLUGIN_CHECK` | no | `0` | `1` の場合だけ Grafana plugin 確認を skip |
 

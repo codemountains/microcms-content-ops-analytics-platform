@@ -124,6 +124,8 @@ if [[ -z "$GRAFANA_DASHBOARD_UID" ]]; then
   fail "GRAFANA_DASHBOARD_UID must not be empty"
 fi
 
+require_env GRAFANA_DASHBOARD_NAMESPACE
+
 QUERY_API_URL="${QUERY_API_URL:-}"
 if [[ -z "$QUERY_API_URL" ]]; then
   need_command tofu
@@ -198,17 +200,21 @@ case "$datasource_get_status" in
 esac
 
 dashboard_folder_uid="${GRAFANA_FOLDER_UID:-}"
+dashboard_resource_version=""
+dashboard_collection_path="/apis/dashboard.grafana.app/v2/namespaces/$GRAFANA_DASHBOARD_NAMESPACE/dashboards"
+dashboard_api_path="/apis/dashboard.grafana.app/v2/namespaces/$GRAFANA_DASHBOARD_NAMESPACE/dashboards/$GRAFANA_DASHBOARD_UID"
 dashboard_get_body="$TMP_DIR/dashboard-get.json"
-dashboard_get_status="$(api_request GET "/api/dashboards/uid/$GRAFANA_DASHBOARD_UID" "$dashboard_get_body")"
+dashboard_get_status="$(api_request GET "$dashboard_api_path" "$dashboard_get_body")"
 case "$dashboard_get_status" in
   2*)
     if [[ -z "$dashboard_folder_uid" ]]; then
-      dashboard_folder_uid="$(jq -r '.meta.folderUid // ""' "$dashboard_get_body")"
+      dashboard_folder_uid="$(jq -r '.metadata.annotations["grafana.app/folder"] // ""' "$dashboard_get_body")"
     fi
+    dashboard_resource_version="$(jq -r '.metadata.resourceVersion // ""' "$dashboard_get_body")"
     ;;
   404) ;;
   *)
-    fail "/api/dashboards/uid/$GRAFANA_DASHBOARD_UID returned HTTP $dashboard_get_status: $(body_summary "$dashboard_get_body")"
+    fail "$dashboard_api_path returned HTTP $dashboard_get_status: $(body_summary "$dashboard_get_body")"
     ;;
 esac
 
@@ -216,24 +222,40 @@ dashboard_payload="$TMP_DIR/dashboard.json"
 jq \
   --arg uid "$GRAFANA_DASHBOARD_UID" \
   --arg folder_uid "$dashboard_folder_uid" \
+  --arg resource_version "$dashboard_resource_version" \
   '
-    .id = null
-    | .uid = $uid
-    | {
-        dashboard: .,
-        overwrite: true,
-        message: "Provisioned by scripts/deploy-grafana-cloud.sh"
-      }
-      + (
-        if $folder_uid == "" then
-          {}
-        else
-          {folderUid: $folder_uid}
-        end
+    .apiVersion = "dashboard.grafana.app/v2"
+    | .kind = "Dashboard"
+    | .metadata.name = $uid
+    | .metadata.annotations = (
+        (.metadata.annotations // {})
+        + {"grafana.app/message": "Provisioned by scripts/deploy-grafana-cloud.sh"}
+        + if $folder_uid == "" then {} else {"grafana.app/folder": $folder_uid} end
+      )
+    | if $resource_version == "" then
+        del(.metadata.resourceVersion)
+      else
+        .metadata.resourceVersion = $resource_version
+      end
+    | del(
+        .metadata.uid,
+        .metadata.generation,
+        .metadata.creationTimestamp,
+        .metadata.managedFields,
+        .metadata.namespace
       )
   ' "$DASHBOARD" >"$dashboard_payload"
 
 dashboard_body="$TMP_DIR/dashboard-response.json"
-dashboard_status="$(api_request POST "/api/dashboards/db" "$dashboard_body" "$dashboard_payload")"
-expect_success "$dashboard_status" "/api/dashboards/db" "$dashboard_body"
-echo "Upserted Grafana dashboard $GRAFANA_DASHBOARD_UID."
+case "$dashboard_get_status" in
+  2*)
+    dashboard_status="$(api_request PUT "$dashboard_api_path" "$dashboard_body" "$dashboard_payload")"
+    expect_success "$dashboard_status" "$dashboard_api_path" "$dashboard_body"
+    echo "Updated Grafana dashboard $GRAFANA_DASHBOARD_UID via dashboard.grafana.app/v2."
+    ;;
+  404)
+    dashboard_status="$(api_request POST "$dashboard_collection_path" "$dashboard_body" "$dashboard_payload")"
+    expect_success "$dashboard_status" "$dashboard_collection_path" "$dashboard_body"
+    echo "Created Grafana dashboard $GRAFANA_DASHBOARD_UID via dashboard.grafana.app/v2."
+    ;;
+esac

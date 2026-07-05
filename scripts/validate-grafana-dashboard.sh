@@ -36,6 +36,115 @@ run_jq() {
 
 run_jq "dashboard JSON must be valid" empty
 
+run_jq "dashboard must be a Grafana v2 Kubernetes resource" -e '
+  . as $root
+  | .apiVersion == "dashboard.grafana.app/v2"
+    and .kind == "Dashboard"
+    and (.metadata.name | type == "string" and length > 0)
+    and (.status | type == "object")
+    and (has("panels") | not)
+    and (has("templating") | not)
+    and (has("schemaVersion") | not)
+    and (.spec.elements | type == "object")
+    and (.spec.layout.kind == "GridLayout")
+    and (.spec.layout.spec.items | type == "array")
+    and ((.spec.elements | length) == 9)
+    and ((.spec.layout.spec.items | length) == 9)
+    and all(.spec.layout.spec.items[]; .spec.element.kind == "Panel" and (.spec.element.name as $name | $root.spec.elements[$name].kind == "Panel"))
+    and ((.spec.variables | length) == 2)
+    and ((.spec.annotations | length) == 0)
+    and ((.spec.links | length) == 0)
+'
+
+TMP_DIR="$(mktemp -d)"
+cleanup() {
+  rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+NORMALIZED_DASHBOARD="$TMP_DIR/dashboard-classic-view.json"
+jq '
+  def graph_tooltip($cursorSync):
+    if $cursorSync == "Crosshair" then 1
+    elif $cursorSync == "Tooltip" then 2
+    else 0
+    end;
+  def variable_type($kind):
+    if ($kind | endswith("Variable")) then
+      (($kind | sub("Variable$"; "")) | ascii_downcase)
+    else
+      ($kind | ascii_downcase)
+    end;
+  . as $resource
+  | .spec as $spec
+  | {
+      annotations: {list: ($spec.annotations | map(.spec))},
+      editable: ($spec.editable // true),
+      fiscalYearStartMonth: ($spec.timeSettings.fiscalYearStartMonth // 0),
+      graphTooltip: graph_tooltip($spec.cursorSync),
+      links: ($spec.links // []),
+      panels: [
+        $spec.layout.spec.items[]
+        | . as $item
+        | ($spec.elements[$item.spec.element.name].spec) as $panel
+        | ({
+            id: $panel.id,
+            title: $panel.title,
+            description: $panel.description,
+            links: ($panel.links // []),
+            datasource: ($panel.data.spec.queries[0].spec.query.datasource // {}),
+            targets: [
+              ($panel.data.spec.queries // [])[].spec
+              | (.query.spec + {
+                  refId: .refId,
+                  hide: .hidden,
+                  datasource: (.query.datasource // {})
+                })
+            ],
+            transformations: [
+              ($panel.data.spec.transformations // [])[]
+              | ({id: .group} + .spec)
+            ],
+            type: $panel.vizConfig.group,
+            pluginVersion: $panel.vizConfig.version,
+            options: ($panel.vizConfig.spec.options // {}),
+            fieldConfig: ($panel.vizConfig.spec.fieldConfig // {defaults: {}, overrides: []}),
+            gridPos: {
+              x: $item.spec.x,
+              y: $item.spec.y,
+              w: $item.spec.width,
+              h: $item.spec.height
+            }
+          }
+          + (if $panel.transparent? then {transparent: $panel.transparent} else {} end))
+      ],
+      preload: ($spec.preload // false),
+      refresh: ($spec.timeSettings.autoRefresh // ""),
+      tags: ($spec.tags // []),
+      templating: {
+        list: [
+          ($spec.variables // [])[]
+          | (.spec + {type: variable_type(.kind)})
+        ]
+      },
+      time: {
+        from: $spec.timeSettings.from,
+        to: $spec.timeSettings.to
+      },
+      timepicker: {
+        refresh_intervals: ($spec.timeSettings.autoRefreshIntervals // []),
+        hidden: ($spec.timeSettings.hideTimepicker // false)
+      },
+      timezone: ($spec.timeSettings.timezone // "browser"),
+      title: $spec.title,
+      uid: $resource.metadata.name,
+      version: ($spec.revision // 0),
+      schemaVersion: 42
+    }
+' "$DASHBOARD" >"$NORMALIZED_DASHBOARD"
+
+DASHBOARD="$NORMALIZED_DASHBOARD"
+
 infinity_type="yesoreyeram-infinity-datasource"
 old_json_type="marcusolsson-json-datasource"
 
