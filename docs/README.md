@@ -13,6 +13,7 @@ Product requirements は [`../requirements/`](../requirements/)。
 
 | ファイル | 内容 |
 | --- | --- |
+| [`microcms/`](microcms/) | [microCMS 公式ドキュメント](https://document.microcms.io/) の一部をマークダウンで格納するディレクトリ。本リポジトリの実装・運用で参照するページをローカルに保持する |
 | [`local-debug.md`](local-debug.md) | ローカルデバッグ手順。Floci、ngrok、webhook 受信から Parquet 保存、Query API 集計までの確認方法 |
 | [`aws-deploy.md`](aws-deploy.md) | AWS デプロイ手順。OpenTofu と `just deploy-all` による初回デプロイと運用の流れ |
 
