@@ -516,6 +516,25 @@ fn bulk_seed_matches_new_event_kind_ratios() {
     );
 }
 
+#[test]
+fn bulk_seed_weights_api_activity_by_content_update_frequency() {
+    let events = generate_test_bulk_events_for_days(50_000, 365);
+    let counts = count_apis(&events);
+
+    assert_api_share(&counts, "blogs", 0.235..=0.245);
+    assert_api_share(&counts, "news", 0.175..=0.185);
+    assert_api_share(&counts, "papers", 0.145..=0.155);
+    assert_api_share(&counts, "pages", 0.125..=0.135);
+
+    assert_api_share(&counts, "cards", 0.075..=0.085);
+    assert_api_share(&counts, "tags", 0.055..=0.065);
+    assert_api_share(&counts, "labels", 0.045..=0.055);
+    assert_api_share(&counts, "advertisements", 0.045..=0.055);
+
+    assert_api_share(&counts, "authors", 0.025..=0.035);
+    assert_api_share(&counts, "categories", 0.025..=0.035);
+}
+
 fn generate_test_bulk_events(count: u32) -> Vec<NormalizedEvent> {
     generate_test_bulk_events_for_days(count, 90)
 }
@@ -525,6 +544,28 @@ fn count_events(events: &[NormalizedEvent], event_kind: &str) -> usize {
         .iter()
         .filter(|event| event.event_kind.as_deref() == Some(event_kind))
         .count()
+}
+
+fn count_apis(events: &[NormalizedEvent]) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for event in events {
+        let api = event.api.as_deref().expect("bulk event api");
+        *counts.entry(api.to_owned()).or_default() += 1;
+    }
+    counts
+}
+
+fn assert_api_share(
+    counts: &BTreeMap<String, usize>,
+    api: &str,
+    expected: std::ops::RangeInclusive<f64>,
+) {
+    let total: usize = counts.values().sum();
+    let actual = *counts.get(api).unwrap_or(&0) as f64 / total as f64;
+    assert!(
+        expected.contains(&actual),
+        "api={api} expected share {expected:?}, got {actual:.4}"
+    );
 }
 
 fn generate_test_bulk_events_for_days(count: u32, days: u32) -> Vec<NormalizedEvent> {

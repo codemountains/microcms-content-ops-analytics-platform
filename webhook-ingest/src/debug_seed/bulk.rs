@@ -33,6 +33,21 @@ pub(super) const BULK_APIS: &[&str] = &[
     "papers",
     "cards",
 ];
+
+const BULK_API_ACTIVITY_WEIGHT_TOTAL: u32 = 100;
+const BULK_API_ACTIVITY_WEIGHTS: [u32; 10] = [
+    24, // blogs: frequently updated editorial content
+    3,  // authors: rarely updated master data
+    18, // news: frequently updated announcements
+    3,  // categories: rarely updated taxonomy
+    13, // pages: frequently maintained static content
+    5,  // advertisements: occasional campaign updates
+    6,  // tags: occasional taxonomy updates
+    5,  // labels: occasional taxonomy updates
+    15, // papers: frequently updated publication content
+    8,  // cards: occasional operational content
+];
+
 pub(super) fn generate_bulk_files(
     config: &DebugSeedConfig,
 ) -> Result<DebugSeedSummary, IngestError> {
@@ -101,7 +116,7 @@ pub(super) fn generate_bulk_activity_events(
         .saturating_sub(targets.publish_from_draft);
 
     for pair_index in 0..targets.publish_from_draft {
-        let api = BULK_APIS[pair_index as usize % BULK_APIS.len()];
+        let api = weighted_bulk_api(pair_index);
         let publish_lead_days = api_publish_lead_days(api, pair_index);
         let draft_to_publish_days = api_draft_to_publish_days(api, pair_index);
         let publish_at = random_received_at_on_schedule(rng, schedule);
@@ -165,7 +180,7 @@ pub(super) fn generate_bulk_activity_events(
     }
 
     for orphan_index in 0..orphan_drafts {
-        let api = BULK_APIS[orphan_index as usize % BULK_APIS.len()];
+        let api = weighted_bulk_api(orphan_index);
         let received_at = random_received_at_on_schedule(rng, schedule);
         let draft_created_at = received_at - Duration::days(i64::from(orphan_index % 7 + 1));
         let content_id = deterministic_content_ulid(
@@ -192,7 +207,7 @@ pub(super) fn generate_bulk_activity_events(
     }
 
     for draft_index in 0..targets.save_draft {
-        let api = BULK_APIS[draft_index as usize % BULK_APIS.len()];
+        let api = weighted_bulk_api(draft_index);
         let received_at = random_received_at_on_schedule(rng, schedule);
         let draft_created_at = received_at - Duration::days(i64::from(draft_index % 10 + 1));
         let content_id = deterministic_content_ulid(
@@ -219,7 +234,7 @@ pub(super) fn generate_bulk_activity_events(
     }
 
     for publish_index in 0..targets.initial_publish {
-        let api = BULK_APIS[publish_index as usize % BULK_APIS.len()];
+        let api = weighted_bulk_api(publish_index);
         let publish_lead_days =
             api_publish_lead_days(api, publish_index) + i64::from(publish_index % 4);
         let publish_at = random_received_at_on_schedule(rng, schedule);
@@ -278,9 +293,9 @@ pub(super) fn generate_bulk_activity_events(
     }
     shuffle_bulk_templates(rng, &mut filler_templates);
 
-    for template in filler_templates {
+    for (filler_index, template) in filler_templates.into_iter().enumerate() {
         let received_at = random_received_at_on_schedule(rng, schedule);
-        let api = BULK_APIS[rng.next_usize(BULK_APIS.len())];
+        let api = weighted_bulk_api(filler_index as u32);
         let content_id = pick_content_id(rng, config, api);
         push_bulk_event(
             events,
@@ -295,6 +310,19 @@ pub(super) fn generate_bulk_activity_events(
     }
 
     Ok(())
+}
+
+fn weighted_bulk_api(index: u32) -> &'static str {
+    let mut offset = index % BULK_API_ACTIVITY_WEIGHT_TOTAL;
+    for (api, weight) in BULK_APIS.iter().zip(BULK_API_ACTIVITY_WEIGHTS) {
+        if offset < weight {
+            return api;
+        }
+        offset -= weight;
+    }
+    BULK_APIS
+        .last()
+        .expect("bulk API activity weights must cover at least one API")
 }
 
 fn shuffle_bulk_templates(rng: &mut SeededRng, templates: &mut [BulkTemplate]) {
