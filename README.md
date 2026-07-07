@@ -245,6 +245,63 @@ AWS 認証情報はローカルの credential chain を利用します。
 | `GRAFANA_FOLDER_UID` | no | なし | dashboard 配置先 folder uid |
 | `GRAFANA_SKIP_PLUGIN_CHECK` | no | `0` | `1` の場合だけ Grafana plugin 確認を skip |
 
+## 開発環境（Nix）
+
+このリポジトリは [Nix flake](https://nixos.wiki/wiki/Flakes) で開発用ツールチェーンを提供します。
+Rust toolchain は [`rust-toolchain.toml`](./rust-toolchain.toml) を single source of truth とし、devShell では `rustfmt` / `clippy` も含めます。
+
+### 前提
+
+- [Nix](https://nixos.org/download/) 2.18 以降（flakes 有効）
+  - 初回利用時は `~/.config/nix/nix.conf` などに `experimental-features = nix-command flakes` を設定してください（詳細は [NixOS Wiki: Flakes](https://nixos.wiki/wiki/Flakes)）
+- Docker / Docker Compose（ローカル起動・`just debug`・`just check-ci` で必要。Nix では daemon を提供しません）
+
+### 使い方
+
+[direnv](https://direnv.net/) がインストール済みの場合:
+
+```bash
+direnv allow
+```
+
+direnv を使わない場合:
+
+```bash
+nix develop
+```
+
+### devShell に含まれる主なツール
+
+| ツール | 用途 |
+| --- | --- |
+| `rustc` / `cargo` / `rustfmt` / `clippy` | Rust 開発（`rust-toolchain.toml` 準拠） |
+| `just` | リポジトリ共通コマンド |
+| `tofu` | OpenTofu（`infra/` の validate / apply） |
+| `aws` | AWS CLI（ローカル Floci S3 操作など） |
+| `jq` / `curl` / `openssl` / `xxd` | スクリプト・デバッグ補助 |
+| `docker` / `docker-compose` | Docker CLI / Compose CLI（daemon は別途必要） |
+| `gitleaks` | secret scan（任意。CI の `security.yml` と同種の検出を手元でも確認できる） |
+
+devShell 内では `just test` や `just validate` をそのまま実行できます。
+Docker が必要なコマンド（`just debug`、`just check-ci`、`docker compose up` など）は、別途 Docker Desktop / OrbStack などを起動してください。
+
+### Codex CLI
+
+[Codex CLI](https://developers.openai.com/codex) では [`.codex/environments/environment.toml`](./.codex/environments/environment.toml) が Nix devShell を利用します。
+setup 時は `direnv` を試し、主要ツールが不足している場合は `nix develop` に fallback します。
+
+Codex actions から次を実行できます。
+
+| Action | 内容 |
+| --- | --- |
+| Check | `just check` |
+| Test | `just test` |
+| Validate | `just validate` |
+| Clippy | `just clippy` |
+
+`Validate` と `Check` は `docker compose config` を呼びますが、これは Compose ファイルの構文検証のみで Docker daemon は不要です。
+`just debug` や `just check-ci` のように実際にコンテナを起動・ビルドする操作では、Codex 実行環境側で Docker daemon が利用可能である必要があります。
+
 ## テスト
 
 ```bash

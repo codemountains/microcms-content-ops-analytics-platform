@@ -5,10 +5,12 @@
 ## 前提
 
 - Docker / Docker Compose
-- OpenTofu
-- AWS CLI
-- just
 - ngrok authtoken
+
+Nix を使う場合は、リポジトリの devShell で OpenTofu（`tofu`）、AWS CLI（`aws`）、`just`、Rust toolchain が揃います。
+[direnv](https://direnv.net/) がインストール済みなら `direnv allow`、未インストールなら `nix develop` で入れます。
+
+Nix を使わない場合は、上記ツールを個別にインストールしてください。
 
 Floci は Docker image で起動するため、ローカルに `floci` CLI がなくても検証できます。
 
