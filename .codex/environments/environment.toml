@@ -1,0 +1,55 @@
+version = 1
+name = "microcms-content-ops-analytics-platform"
+
+[setup]
+script = """
+set -eu
+
+if command -v direnv >/dev/null 2>&1 && [ -f .envrc ]; then
+  if direnv allow && direnv_exports="$(direnv export bash)" && eval "$direnv_exports"; then
+    :
+  else
+    echo "warning: direnv failed; continuing with explicit setup fallback" >&2
+  fi
+fi
+
+if { ! command -v just >/dev/null 2>&1 || ! command -v cargo >/dev/null 2>&1; } && command -v nix >/dev/null 2>&1; then
+  exec nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --command bash -lc '
+    set -eu
+    command -v just >/dev/null
+    command -v cargo >/dev/null
+    command -v rustc >/dev/null
+    echo "development environment is ready"
+  '
+fi
+
+command -v just >/dev/null
+command -v cargo >/dev/null
+command -v rustc >/dev/null
+echo "development environment is ready"
+"""
+
+[cleanup]
+script = """
+rm -rf .direnv
+"""
+
+[[actions]]
+name = "Check"
+icon = "run"
+command = "nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --command just check"
+
+[[actions]]
+name = "Test"
+icon = "run"
+command = "nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --command just test"
+
+[[actions]]
+name = "Validate"
+icon = "run"
+command = "nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --command just validate"
+
+[[actions]]
+name = "Clippy"
+icon = "run"
+command = "nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --command just clippy"
