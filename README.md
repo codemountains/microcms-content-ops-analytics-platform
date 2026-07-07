@@ -275,6 +275,7 @@ nix develop
 | ツール | 用途 |
 | --- | --- |
 | `rustc` / `cargo` / `rustfmt` / `clippy` | Rust 開発（`rust-toolchain.toml` 準拠） |
+| `git` | バージョン管理（devShell は PATH を上書きするため同梱） |
 | `just` | リポジトリ共通コマンド |
 | `tofu` | OpenTofu（`infra/` の validate / apply） |
 | `aws` | AWS CLI（ローカル Floci S3 操作など） |

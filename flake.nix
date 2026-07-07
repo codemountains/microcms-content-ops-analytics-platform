@@ -39,6 +39,7 @@
         pkgs.mkShell {
           packages = with pkgs; [
             toolchain
+            git
             just
             opentofu
             awscli2
